@@ -1,0 +1,12 @@
+{
+  "name": "foundry-founder-club",
+  "version": "5.6.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "npx serve public",
+    "build": "node build.mjs"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
