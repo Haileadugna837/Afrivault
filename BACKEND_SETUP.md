@@ -58,7 +58,14 @@ npm run setup:admin
 
 Remove `ADMIN_PASSWORD` from the terminal environment after the command completes. The script creates or updates the confirmed primary Supabase Auth user and links the `ADMIN-PRIMARY` profile.
 
-## 4. Configure email and OTP providers
+## 4. Configure verification providers
+
+Current pilot requirement:
+
+- Add `TELEGRAM_GATEWAY_TOKEN` and use Telegram as the only member phone-verification channel.
+- Administrator approval confirms the applicant's login email without sending a message. Telegram OTP is the verification gate for member access.
+
+Reserved for the later email and WhatsApp phase:
 
 Twilio SendGrid:
 
@@ -85,9 +92,9 @@ Telegram:
 1. An applicant selects a membership type and supplies their own password, email, phone and preferred OTP channel.
 2. The password goes directly to Supabase Auth. It is never written to `applications`, local storage or logs.
 3. The account remains email-unconfirmed and has no member profile until an administrator approves it.
-4. Approval creates the member profile and sends a SendGrid approval/verification link.
-5. Clicking the link verifies the email and opens the phone-verification screen.
-6. WhatsApp codes use Meta Cloud API; Telegram codes use Telegram Gateway.
+4. Approval creates the member profile and activates the applicant's email/password login.
+5. The approved applicant signs in and completes Telegram phone verification.
+6. SendGrid email verification and Meta WhatsApp are currently dormant and can be enabled in a later phase.
 7. Only a member with an active profile, verified email and verified phone can load benefits/events or generate a QR pass.
 8. Changing email or phone resets the corresponding verification gate.
 

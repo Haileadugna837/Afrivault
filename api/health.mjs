@@ -5,6 +5,7 @@ export default function handler(_req,res){
   send(res,database?200:503,{
     ok:database,
     service:'foundry-api',
+    onboarding:'telegram-only',
     database:database?'configured':'missing-environment',
     providers:{
       email:present('TWILIO_SENDGRID_API_KEY','EMAIL_FROM'),

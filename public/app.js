@@ -358,7 +358,7 @@ function openPhoneVerification(account){
   $('#memberApp').classList.add('hidden');$('#adminApp').classList.add('hidden');$('#partnerApp').classList.add('hidden');
   $('#authShell').classList.remove('hidden');
   $('#verificationEmail').value=account.email||'';$('#verificationPhone').value=account.phone||'';
-  const preferred=account.preferredOtpChannel||account.phoneVerificationChannel||'whatsapp';
+  const preferred='telegram';
   const choice=$(`#phoneVerificationForm input[name="channel"][value="${preferred}"]`);if(choice)choice.checked=true;
   $('#otpEntry').classList.add('hidden');$('#phoneOtpCode').value='';$('#phoneVerificationError').textContent='';
   showAuthView('verify-phone');
@@ -1122,7 +1122,7 @@ async function submitApplication() {
 
 function phoneVerificationPayload(){
   const form=$('#phoneVerificationForm');
-  return {email:form.elements.email.value.trim().toLowerCase(),phone:form.elements.phone.value.trim(),channel:new FormData(form).get('channel')||'whatsapp'};
+  return {email:form.elements.email.value.trim().toLowerCase(),phone:form.elements.phone.value.trim(),channel:'telegram'};
 }
 
 async function saveVerificationContact(){
@@ -1141,7 +1141,7 @@ async function sendPhoneVerificationCode(){
   const button=$('#sendPhoneCode');button.disabled=true;button.textContent='Sending…';$('#phoneVerificationError').textContent='';
   try{
     const result=await backend.sendPhoneOtp(phoneVerificationPayload());verificationChallengeId=result.challengeId;
-    $('#otpEntry').classList.remove('hidden');$('#phoneOtpCode').focus();showToast(`Code sent through ${result.channel==='whatsapp'?'WhatsApp':'Telegram'}`);
+    $('#otpEntry').classList.remove('hidden');$('#phoneOtpCode').focus();showToast('Code sent through Telegram');
   }catch(error){$('#phoneVerificationError').textContent=error.message||'The verification code could not be sent.';}
   finally{button.disabled=false;button.innerHTML='Send verification code <span>→</span>';}
 }

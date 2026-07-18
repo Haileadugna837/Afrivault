@@ -43,3 +43,5 @@ npm run dev
 - Connected deployments persist operational data in Supabase across devices.
 
 OpenAI community matching is intentionally not included.
+
+The current pilot exposes Telegram as the only phone-verification channel. Admin approval activates the applicant's email/password login, and Telegram OTP completes access. SendGrid email verification and Meta WhatsApp remain reserved for a later production phase.
