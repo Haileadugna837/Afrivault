@@ -2,6 +2,8 @@
 
 A responsive Telegram Web App and desktop portal for an application-only business community with role-based memberships, benefits, events and partner verification.
 
+Live deployment: [afrivault-gamma.vercel.app](https://afrivault-gamma.vercel.app)
+
 ## Production backend
 
 The repository includes a production-ready backend foundation:
