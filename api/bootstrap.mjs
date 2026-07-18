@@ -5,12 +5,10 @@ export default async function handler(req,res){
   if(!method(req,res,['GET']))return;
   try{
     const actor=await requireIdentity(req);
-    if(['founder','employee','student','unemployed'].includes(actor.role)&&actor.user.email_confirmed_at&&actor.profile.onboarding_status==='email_pending'){
-      await update('profiles',`user_id=eq.${actor.user.id}`,{onboarding_status:'phone_pending'});
-      actor.profile.onboarding_status='phone_pending';
-    }
-    if(['founder','employee','student','unemployed'].includes(actor.role)&&actor.profile.onboarding_status!=='complete'){
-      send(res,200,{actor,categories:[],benefits:[],events:[],eventPeople:[],members:[actor.profile],rsvps:[],saved:[]});return;
+    if(['founder','employee','student','unemployed'].includes(actor.role)&&actor.profile.status==='active'&&(actor.profile.onboarding_status!=='complete'||actor.profile.verification!=='verified')){
+      const approved={onboarding_status:'complete',verification:'verified',phone_verification_channel:null,phone_verified_at:null};
+      await update('profiles',`user_id=eq.${actor.user.id}`,approved);
+      Object.assign(actor.profile,approved);
     }
     const categories=await select('benefit_categories','select=*&order=sort_order');
     let benefits=[];let events=[];let eventPeople=[];

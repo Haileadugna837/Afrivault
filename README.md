@@ -14,8 +14,7 @@ The repository includes a production-ready backend foundation:
 - Cross-device member, benefit, event, RSVP and partner data
 - Vercel Node.js functions for privileged operations
 - Two-minute server-signed membership QR tokens and partner verification logs
-- Twilio SendGrid email queue and approval delivery
-- Direct Meta WhatsApp Cloud API and Telegram Gateway phone verification
+- Optional Twilio SendGrid email queue and Meta WhatsApp support for a later phase
 - Server-side event weather proxy using Open-Meteo
 - Local prototype fallback when backend environment variables are absent
 
@@ -23,7 +22,7 @@ See [`BACKEND_SETUP.md`](BACKEND_SETUP.md) for the integration steps.
 
 ## Accounts
 
-Production seed data no longer creates demo members or a demo administrator. Use `npm run setup:admin` with local environment variables after applying the database migrations. Member credentials are created from the membership application and activated only after admin approval, email verification and phone verification.
+Production seed data no longer creates demo members or a demo administrator. Use `npm run setup:admin` with local environment variables after applying the database migrations. Member credentials are created from the membership application and activated only after administrator approval.
 
 ## Run locally
 
@@ -35,7 +34,7 @@ npm run dev
 ## Prototype behavior
 
 - Guests begin at member login or a five-step membership application.
-- Applications collect identity, contact, professional profile, a member-chosen password and preferred phone-verification channel.
+- Applications collect identity, contact, professional profile and a member-chosen password.
 - Founder, employee, student and opportunity members have distinct card designs and benefit access.
 - The admin can create a benefit and assign it to one or more membership types.
 - Administrators can edit member profiles, account status, verification, membership type and individual benefit exclusions.
@@ -46,4 +45,4 @@ npm run dev
 
 OpenAI community matching is intentionally not included.
 
-The current pilot exposes Telegram as the only phone-verification channel. Admin approval activates the applicant's email/password login, and Telegram OTP completes access. SendGrid email verification and Meta WhatsApp remain reserved for a later production phase.
+The current pilot uses administrator approval as the only verification gate. Approval activates the applicant's email/password login immediately. SendGrid email verification and Meta WhatsApp remain reserved for a later production phase.

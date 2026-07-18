@@ -1,6 +1,6 @@
 # Foundry production backend setup
 
-Foundry uses Supabase PostgreSQL, Auth and Storage; Vercel Node.js functions; Twilio SendGrid email; Twilio Verify for WhatsApp OTP; Telegram Gateway for Telegram OTP; signed member QR codes; and server-side event weather.
+Foundry uses Supabase PostgreSQL, Auth and Storage; Vercel Node.js functions; signed member QR codes; and server-side event weather. The current pilot uses administrator approval as the only membership verification gate.
 
 ## 1. Apply the database files
 
@@ -8,8 +8,9 @@ In Supabase SQL Editor, run these in order:
 
 1. `supabase/migrations/202607180001_foundry_backend.sql`
 2. `supabase/migrations/202607180002_verified_onboarding.sql`
-3. `supabase/cleanup-demo-identities.sql`
-4. `supabase/seed.sql`
+3. `supabase/migrations/202607180004_admin_approval_only.sql`
+4. `supabase/cleanup-demo-identities.sql`
+5. `supabase/seed.sql`
 
 The cleanup file deletes only the known prototype profiles, applications, partner and Auth users. It preserves benefits, categories, events and settings. The current seed contains content only and no longer creates demo identities.
 
@@ -21,8 +22,8 @@ Add these Environment Variables to the Vercel project for Production, Preview an
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_publishable_or_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_server_only_service_role_key
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
+SUPABASE_SECRET_KEY=your_server_only_secret_key
 QR_SIGNING_SECRET=a_random_secret_of_at_least_32_characters
 APP_URL=https://your-production-domain.example
 
@@ -36,10 +37,9 @@ WHATSAPP_TEMPLATE_LANGUAGE=en_US
 WHATSAPP_GRAPH_VERSION=v23.0
 OTP_HASH_SECRET=a_separate_random_secret_of_at_least_32_characters
 
-TELEGRAM_GATEWAY_TOKEN=your_telegram_gateway_token
 ```
 
-Never put the service-role key, Meta token, SendGrid key, Telegram token, OTP/QR secrets or account passwords in a public file or a `NEXT_PUBLIC_` variable.
+Never put the secret/service-role key, Meta token, SendGrid key, OTP/QR secrets or account passwords in a public file or a `NEXT_PUBLIC_` variable.
 
 In Supabase Authentication → URL Configuration, set the Site URL to `APP_URL` and add the production/preview domains to Redirect URLs. Approval and email-change links depend on this.
 
@@ -58,12 +58,12 @@ npm run setup:admin
 
 Remove `ADMIN_PASSWORD` from the terminal environment after the command completes. The script creates or updates the confirmed primary Supabase Auth user and links the `ADMIN-PRIMARY` profile.
 
-## 4. Configure verification providers
+## 4. Optional future communication providers
 
 Current pilot requirement:
 
-- Add `TELEGRAM_GATEWAY_TOKEN` and use Telegram as the only member phone-verification channel.
-- Administrator approval confirms the applicant's login email without sending a message. Telegram OTP is the verification gate for member access.
+- No messaging provider or phone OTP is required.
+- Administrator approval confirms the applicant's login email and activates membership access.
 
 Reserved for the later email and WhatsApp phase:
 
@@ -81,27 +81,21 @@ Meta WhatsApp Cloud API:
 - Use a permanent system-user token with `whatsapp_business_messaging` permission in production. Temporary dashboard tokens are suitable only for a short test.
 - The API generates a six-digit code and stores only its keyed HMAC hash. Never reuse `OTP_HASH_SECRET` as a public value.
 
-Telegram:
-
-- Create a Telegram Gateway account and obtain its access token.
-- Fund the Gateway account for real deliveries.
-- Recipients must have the submitted phone number registered on Telegram.
-
 ## 5. Onboarding behavior
 
-1. An applicant selects a membership type and supplies their own password, email, phone and preferred OTP channel.
+1. An applicant selects a membership type and supplies their own password, email, phone and professional details.
 2. The password goes directly to Supabase Auth. It is never written to `applications`, local storage or logs.
 3. The account remains email-unconfirmed and has no member profile until an administrator approves it.
 4. Approval creates the member profile and activates the applicant's email/password login.
-5. The approved applicant signs in and completes Telegram phone verification.
-6. SendGrid email verification and Meta WhatsApp are currently dormant and can be enabled in a later phase.
-7. Only a member with an active profile, verified email and verified phone can load benefits/events or generate a QR pass.
-8. Changing email or phone resets the corresponding verification gate.
+5. The approved applicant signs in immediately; there is no Telegram or phone-verification screen.
+6. SendGrid email and Meta WhatsApp are dormant and can be enabled in a later phase.
+7. Only an approved member with an active profile can load benefits/events or generate a QR pass.
+8. Members can update their email and phone from account settings without entering an OTP during this pilot.
 
 ## Security notes
 
 - Rotate any credential ever pasted into a chat or screenshot.
 - Keep RLS enabled and keep the service-role key server-only.
 - QR tokens expire after two minutes.
-- OTP requests and approval-email resends are rate-limited.
+- Public applications and guest registrations are rate-limited.
 - Review the `email_outbox` table for queued or failed messages.

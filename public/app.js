@@ -116,7 +116,6 @@ let saved = new Set();
 let toastTimer;
 let qrInterval;
 let applicationStep = 1;
-let verificationChallengeId = '';
 let pendingCreateImage = null;
 let pendingEditImage = null;
 let pendingCreateGallery = [];
@@ -352,27 +351,12 @@ async function performLogin(email,password) {
   }
 }
 
-function openPhoneVerification(account){
-  currentUser={...account};verificationChallengeId='';
-  sessionStorage.setItem('foundry-session',account.email);
-  $('#memberApp').classList.add('hidden');$('#adminApp').classList.add('hidden');$('#partnerApp').classList.add('hidden');
-  $('#authShell').classList.remove('hidden');
-  $('#verificationEmail').value=account.email||'';$('#verificationPhone').value=account.phone||'';
-  const preferred='telegram';
-  const choice=$(`#phoneVerificationForm input[name="channel"][value="${preferred}"]`);if(choice)choice.checked=true;
-  $('#otpEntry').classList.add('hidden');$('#phoneOtpCode').value='';$('#phoneVerificationError').textContent='';
-  showAuthView('verify-phone');
-}
-
 async function refreshRemoteData(){
   if(!backendEnabled()||!currentUser||$('.admin-modal[aria-hidden="false"]'))return;
   try{await backend.bootstrap();offers=loadOffers();if(currentUser.role==='admin')renderAdmin();else if(currentUser.role==='partner')renderPartnerApp(false);else{const member=getMemberByEmail(currentUser.email);if(member)currentUser={...currentUser,...member,subtitle:`${member.title} · ${member.organization}`};renderMemberExperience();}}catch(error){console.error('Background refresh failed',error)}
 }
 
 function signIn(account) {
-  if(!['admin','partner'].includes(account.role)&&account.onboardingStatus&&account.onboardingStatus!=='complete'){
-    openPhoneVerification(account);return;
-  }
   const member = ['admin','partner'].includes(account.role) ? null : getMemberByEmail(account.email);
   if (member?.status && member.status !== 'active') {
     showAuthView('login');
@@ -498,7 +482,6 @@ async function saveMemberSettings(event) {
     if (newPassword !== data.get('confirmPassword')) { $('#memberSecurityError').textContent = 'New passwords do not match.'; return; }
     if (!/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) { $('#memberSecurityError').textContent = 'Use at least one letter and one number.'; return; }
   }
-  const previousEmail=members[index].email;const previousPhone=members[index].phone;
   members[index] = {
     ...members[index], name:data.get('name').trim(), email, phone:data.get('phone').trim(), city:data.get('city').trim(), organization:data.get('organization').trim(), title:data.get('title').trim(), language:data.get('language'), twoFactor:data.get('twoFactor') === 'on', emailAlerts:data.get('emailAlerts') === 'on', telegramAlerts:data.get('telegramAlerts') === 'on', usageReceipts:data.get('usageReceipts') === 'on', ...(!backendEnabled()&&newPassword ? {password:newPassword} : {})
   };
@@ -508,9 +491,6 @@ async function saveMemberSettings(event) {
   currentUser = {...currentUser,...members[index],subtitle:`${members[index].title} · ${members[index].organization}`};
   sessionStorage.setItem('foundry-session', email);
   closeAdminModal('memberSettingsModal');
-  if(backendEnabled()&&(email!==previousEmail||members[index].phone!==previousPhone)){
-    openPhoneVerification({...currentUser,onboardingStatus:'phone_pending'});showToast('Verify your updated contact details through Telegram');return;
-  }
   renderMemberExperience();
   renderDemoAccounts();
   showToast('Member settings saved');
@@ -1117,42 +1097,6 @@ async function submitApplication() {
     $('#applicationReference').textContent=reference;showAuthView('submitted');tgHaptic('heavy');
   }catch(error){$('#applicationError').textContent=error.message||'The application could not be submitted. Please try again.';}
   finally{button.disabled=false;button.innerHTML='Submit application <span>↗</span>';}
-}
-
-function phoneVerificationPayload(){
-  const form=$('#phoneVerificationForm');
-  return {email:form.elements.email.value.trim().toLowerCase(),phone:form.elements.phone.value.trim(),channel:'telegram'};
-}
-
-async function saveVerificationContact(){
-  const form=$('#phoneVerificationForm');if(!form.reportValidity())return null;
-  $('#phoneVerificationError').textContent='';
-  try{
-    const result=await backend.updateOnboardingContact(phoneVerificationPayload());
-    currentUser={...currentUser,...result,preferredOtpChannel:result.channel};
-    if(result.emailChanged)showToast('Email updated. Continue with Telegram verification.');
-    showToast('Contact details saved');return result;
-  }catch(error){$('#phoneVerificationError').textContent=error.message||'Contact details could not be saved.';return null;}
-}
-
-async function sendPhoneVerificationCode(){
-  const savedContact=await saveVerificationContact();if(!savedContact||savedContact.emailChanged)return;
-  const button=$('#sendPhoneCode');button.disabled=true;button.textContent='Sending…';$('#phoneVerificationError').textContent='';
-  try{
-    const result=await backend.sendPhoneOtp(phoneVerificationPayload());verificationChallengeId=result.challengeId;
-    $('#otpEntry').classList.remove('hidden');$('#phoneOtpCode').focus();showToast('Code sent through Telegram');
-  }catch(error){$('#phoneVerificationError').textContent=error.message||'The verification code could not be sent.';}
-  finally{button.disabled=false;button.innerHTML='Send verification code <span>→</span>';}
-}
-
-async function finishPhoneVerification(){
-  if(!verificationChallengeId){$('#phoneVerificationError').textContent='Request a verification code first.';return;}
-  const code=$('#phoneOtpCode').value.trim();$('#phoneVerificationError').textContent='';
-  try{
-    await backend.verifyPhoneOtp({challengeId:verificationChallengeId,code});
-    const account=await backend.restore();if(!account)throw new Error('Verification succeeded. Please sign in again.');
-    offers=loadOffers();signIn(account);showToast('Membership verified');
-  }catch(error){$('#phoneVerificationError').textContent=error.message||'The code could not be verified.';}
 }
 
 function toDateTimeLocal(value) {
@@ -2117,10 +2061,6 @@ $('#togglePassword').addEventListener('click', event => {
 });
 $('#forgotPassword').addEventListener('click',async()=>{const email=$('#loginEmail').value.trim().toLowerCase();if(!email)return $('#loginError').textContent='Enter your email address first.';if(!backendEnabled())return showToast('Password reset requires the connected backend');try{await backend.requestPasswordReset(email);showToast('Password reset email sent')}catch(error){$('#loginError').textContent=error.message}});
 $('#resetPasswordForm').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,password=form.elements.password.value;if(password!==form.elements.confirmPassword.value)return $('#resetPasswordError').textContent='Passwords do not match.';if(!/[A-Za-z]/.test(password)||!/[0-9]/.test(password))return $('#resetPasswordError').textContent='Include at least one letter and one number.';try{await backend.updatePassword(password);$('#resetPasswordError').textContent='';showToast('Password updated');showAuthView('login')}catch(error){$('#resetPasswordError').textContent=error.message}});
-$('#saveVerificationContact').addEventListener('click',saveVerificationContact);
-$('#sendPhoneCode').addEventListener('click',sendPhoneVerificationCode);
-$('#phoneVerificationForm').addEventListener('submit',event=>{event.preventDefault();finishPhoneVerification();});
-$('#verificationSignOut').addEventListener('click',()=>signOut('login'));
 
 $('#copyDemoPassword').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText('demo123'); showToast('Demo password copied'); }

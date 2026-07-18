@@ -22,7 +22,7 @@ const qr = await readFile('public/vendor/qrcode.js', 'utf8');
 const jsqr = await readFile('public/vendor/jsQR.js', 'utf8');
 const publicConfig = `window.FOUNDRY_CONFIG = ${JSON.stringify({
   supabaseUrl:process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ixmlmkryvojamioifjce.supabase.co',
-  supabaseAnonKey:process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+  supabaseAnonKey:process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
   apiBase:process.env.NEXT_PUBLIC_API_BASE || ''
 })};\n`;
 await writeFile('dist/config.js', publicConfig);

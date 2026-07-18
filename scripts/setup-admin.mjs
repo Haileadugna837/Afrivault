@@ -1,14 +1,14 @@
 const url=process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/,'');
-const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+const key=process.env.SUPABASE_SECRET_KEY||process.env.SUPABASE_SERVICE_ROLE_KEY;
 const email=process.env.ADMIN_EMAIL?.trim().toLowerCase();
 const password=process.env.ADMIN_PASSWORD;
 const name=process.env.ADMIN_NAME?.trim()||'Community Admin';
 
-if(!url||!key)throw new Error('Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.');
+if(!url||!key)throw new Error('Set NEXT_PUBLIC_SUPABASE_URL and either SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY.');
 if(!email||!password)throw new Error('Set ADMIN_EMAIL and ADMIN_PASSWORD in your local environment.');
 if(password.length<12)throw new Error('ADMIN_PASSWORD must contain at least 12 characters.');
 
-const headers={apikey:key,authorization:`Bearer ${key}`,'content-type':'application/json'};
+const headers={apikey:key,...(!key.startsWith('sb_')?{authorization:`Bearer ${key}`}:{ }),'content-type':'application/json'};
 async function request(path,options={}){
   const response=await fetch(`${url}${path}`,{...options,headers:{...headers,...options.headers}});
   const data=await response.json().catch(()=>null);

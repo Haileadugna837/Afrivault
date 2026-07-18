@@ -3,7 +3,7 @@ export default async function handler(req,res){
   if(!method(req,res,['POST']))return;
   try{
     const actor=await requireIdentity(req,['founder','employee','student','unemployed']);
-    if(actor.profile.status!=='active'||actor.profile.verification!=='verified'||actor.profile.onboarding_status!=='complete')throw Object.assign(new Error('Inactive member'),{status:403,publicMessage:'Membership, email and phone must be verified'});
+    if(actor.profile.status!=='active'||actor.profile.verification!=='verified'||actor.profile.onboarding_status!=='complete')throw Object.assign(new Error('Inactive member'),{status:403,publicMessage:'Your membership must be approved and active'});
     const secret=process.env.QR_SIGNING_SECRET;if(!secret||secret.length<32)throw new Error('QR_SIGNING_SECRET must be at least 32 characters');
     const token=await new SignJWT({memberId:actor.profile.id,role:actor.profile.role,name:actor.profile.name,nonce:crypto.randomUUID()}).setProtectedHeader({alg:'HS256',typ:'JWT'}).setSubject(actor.user.id).setIssuer('foundry-membership').setAudience('foundry-partner').setIssuedAt().setExpirationTime('2m').sign(new TextEncoder().encode(secret));
     send(res,200,{token,expiresIn:120,memberId:actor.profile.id});

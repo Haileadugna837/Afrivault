@@ -51,24 +51,3 @@ export async function sendWhatsAppCode(phone,code){
   if(!response.ok||!requestId)throw Object.assign(new Error(JSON.stringify(data)),{status:502,publicMessage:'WhatsApp could not send the code. Confirm the Meta sender and authentication template are active, then try again.'});
   return {requestId,status:'sent'};
 }
-
-async function telegramRequest(method,payload){
-  const response=await fetch(`https://gatewayapi.telegram.org/${method}`,{
-    method:'POST',
-    headers:{authorization:`Bearer ${required('TELEGRAM_GATEWAY_TOKEN')}`,'content-type':'application/json'},
-    body:JSON.stringify(payload)
-  });
-  const data=await response.json().catch(()=>({}));
-  if(!response.ok||!data.ok)throw Object.assign(new Error(JSON.stringify(data)),{status:502,publicMessage:'Telegram could not send or verify the code. Confirm this phone is registered on Telegram and try again.'});
-  return data.result;
-}
-
-export async function sendTelegramCode(phone){
-  const result=await telegramRequest('sendVerificationMessage',{phone_number:phone,code_length:6,ttl:600});
-  return {requestId:result.request_id,status:result.delivery_status?.status||'sent'};
-}
-
-export async function checkTelegramCode(requestId,code){
-  const result=await telegramRequest('checkVerificationStatus',{request_id:requestId,code:String(code)});
-  return result.verification_status?.status==='code_valid';
-}

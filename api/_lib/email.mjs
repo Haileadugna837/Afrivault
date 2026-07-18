@@ -6,8 +6,8 @@ const templates={
   'rsvp-cancelled':p=>({subject:`RSVP cancelled: ${p.eventTitle}`,html:`<h1>Your attendance was cancelled.</h1><p>Your place for <strong>${escape(p.eventTitle)}</strong> has been released.</p>`}),
   'guest-registration':p=>({subject:`Registration confirmed: ${p.eventTitle}`,html:`<h1>Registration confirmed.</h1><p>Thank you, ${escape(p.name)}. You are registered for <strong>${escape(p.eventTitle)}</strong>.</p>`}),
   'application-received':p=>({subject:'We received your Foundry application',html:`<h1>Your application is in review.</h1><p>Reference: <strong>${escape(p.reference)}</strong></p><p>We’ll email you when the community team completes its review.</p>`}),
-  'account-approved':p=>({subject:'Your Foundry membership is approved',html:`<h1>You’re approved.</h1><p>Your Foundry membership application has been accepted.</p><p><a href="${escape(p.verifyUrl)}">Verify your email and continue</a></p><p>This secure link confirms your email. After that, you’ll verify your phone through WhatsApp or Telegram before entering the member space.</p>`}),
-  'email-verification':p=>({subject:'Verify your Foundry email',html:`<h1>Verify your email.</h1><p><a href="${escape(p.verifyUrl)}">Confirm this email address</a></p><p>Once confirmed, return to Foundry to verify your phone.</p>`}),
+  'account-approved':p=>({subject:'Your Foundry membership is approved',html:`<h1>You’re approved.</h1><p>Your Foundry membership application has been accepted.</p><p><a href="${escape(p.loginUrl||p.appUrl||'#')}">Sign in to your membership</a></p>`}),
+  'email-verification':p=>({subject:'Verify your Foundry email',html:`<h1>Verify your email.</h1><p><a href="${escape(p.verifyUrl)}">Confirm this email address</a></p>`}),
   'account-invitation':p=>({subject:'Your Foundry account is ready',html:`<h1>Welcome to Foundry.</h1><p>Your account has been created.</p><p><a href="${escape(p.loginUrl)}">Sign in</a></p>`})
 };
 

@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';import {body,method,safeError,send} from './_lib/http.mjs';import {requireIdentity} from './_lib/auth.mjs';import {sendTemplate} from './_lib/email.mjs';import {authAdmin,insert,remove,sb,select,update,upsert} from './_lib/supabase.mjs';
-const snakeMember=m=>({id:m.id,email:m.email,name:m.name,phone:m.phone||'',city:m.city||'',organization:m.organization||'',title:m.title||'',role:m.role,status:m.status||'active',verification:m.verification||'pending',expires:m.expires||null,notes:m.notes||'',excluded_benefit_ids:m.excludedBenefits||[],preferences:{language:m.language||'en',twoFactor:Boolean(m.twoFactor),emailAlerts:m.emailAlerts!==false,telegramAlerts:m.telegramAlerts!==false,usageReceipts:m.usageReceipts!==false,preferredOtpChannel:'telegram'}});
+const snakeMember=m=>({id:m.id,email:m.email,name:m.name,phone:m.phone||'',city:m.city||'',organization:m.organization||'',title:m.title||'',role:m.role,status:m.status||'active',verification:m.verification||'pending',expires:m.expires||null,notes:m.notes||'',excluded_benefit_ids:m.excludedBenefits||[],preferences:{language:m.language||'en',twoFactor:Boolean(m.twoFactor),emailAlerts:m.emailAlerts!==false,telegramAlerts:m.telegramAlerts!==false,usageReceipts:m.usageReceipts!==false}});
 const snakeBenefit=o=>({id:o.id,brand:o.brand,title:o.title,category_id:o.category,label:o.label||'',member_value:o.value||'',color:o.color||'#c8fa48',text_color:o.text||'#151613',description:o.description||'',partnership_description:o.partnershipDescription||'',company_description:o.companyDescription||'',eligibility:o.eligibility||[],featured:Boolean(o.featured),status:o.status||'draft',visual_mode:o.visualMode||'color',image_url:o.image||null,gallery:o.gallery||[]});
 const snakeEvent=e=>({id:e.id,title:e.title,organizer:e.organizer,event_type:e.eventType,custom_type:e.customType||'',summary:e.summary||'',description:e.description||'',status:e.status||'draft',featured:Boolean(e.featured),start_at:e.startAt,end_at:e.endAt,timezone:e.timezone||'Africa/Addis_Ababa',rsvp_deadline:e.rsvpDeadline,capacity:Number(e.capacity)||1,guest_policy:e.guestPolicy||'members-only',format:e.format||'in-person',venue:e.venue||'',address:e.address||'',latitude:e.latitude??null,longitude:e.longitude??null,map_label:e.mapLabel||'',online_link:e.onlineLink||'',cost_type:e.costType||'free',price:e.price||'',agenda:e.agenda||'',requirements:e.requirements||'',dress_code:e.dressCode||'',age_restriction:e.ageRestriction||'',accessibility:e.accessibility||'',accessibility_options:e.accessibilityOptions||[],photography_policy:e.photographyPolicy||'allowed',id_requirement:e.idRequirement||'none',id_requirement_custom:e.idRequirementCustom||'',contact_email:e.contactEmail||'',contact_phone:e.contactPhone||'',eligibility:e.eligibility||[],visual_mode:e.visualMode||'color',color:e.color||'#c8fa48',image_url:e.image||null,allow_day_selection:Boolean(e.allowDaySelection),open_registration:Boolean(e.openRegistration)});
 async function ensureAccount(email,password,metadata={}){
@@ -38,12 +38,11 @@ export default async function handler(req,res){
       if(!['founder','employee','student','unemployed'].includes(record.role))throw Object.assign(new Error('Invalid role'),{status:400,publicMessage:'Choose a valid membership type'});
       const phone=String(record.data?.phone||record.phone||'').replace(/[\s()-]/g,'');
       if(!/^\+[1-9]\d{7,14}$/.test(phone))throw Object.assign(new Error('Invalid phone'),{status:400,publicMessage:'Use international phone format, for example +251911234567'});
-      const preferred='telegram';
       let created;
       try{created=await authAdmin('/users',{method:'POST',body:{email,password,email_confirm:false,user_metadata:{role:record.role,application_id:record.id}}});}
       catch(error){if(String(error.message).toLowerCase().match(/already|registered|exists/))throw Object.assign(error,{status:409,publicMessage:'An application or account already exists for this email. Use login or contact the community team.'});throw error;}
       const safeData={...(record.data||record)};delete safeData.password;delete safeData.confirmPassword;
-      try{await insert('applications',[{id:record.id,auth_user_id:created.id,email,name:record.name,phone,preferred_otp_channel:preferred,role:record.role,status:'pending',data:safeData,submitted_at:record.submittedAt||new Date().toISOString()}]);}
+      try{await insert('applications',[{id:record.id,auth_user_id:created.id,email,name:record.name,phone,role:record.role,status:'pending',data:safeData,submitted_at:record.submittedAt||new Date().toISOString()}]);}
       catch(error){await authAdmin(`/users/${created.id}`,{method:'DELETE'}).catch(()=>{});throw error;}
       await sendTemplate({to:email,template:'application-received',payload:{reference:record.id}}).catch(()=>{});send(res,200,{ok:true,reference:record.id});return;
     }
@@ -52,7 +51,6 @@ export default async function handler(req,res){
       const record=payload;await upsert('guest_registrations',[{id:record.id,event_id:record.eventId,name:record.name,email:record.email,phone:record.phone||'',organization:record.organization||'',attendance_days:record.days||[],status:record.status||'going'}]);const [guestEvent]=await select('events',`id=eq.${encodeURIComponent(record.eventId)}&select=title`);await sendTemplate({to:record.email,template:'guest-registration',payload:{name:record.name,eventTitle:guestEvent?.title||'Foundry event'}}).catch(()=>{});send(res,200,{ok:true});return;
     }
     const actor=await requireIdentity(req);
-    if(['founder','employee','student','unemployed'].includes(actor.role)&&actor.profile.onboarding_status!=='complete'&&domain!=='profile')throw Object.assign(new Error('Onboarding incomplete'),{status:403,publicMessage:'Complete email and phone verification before using member features'});
     if(domain==='rsvps'){
       const rows=Object.entries(payload||{}).map(([eventId,r])=>({event_id:eventId,user_id:actor.user.id,status:r.status,email:r.email||actor.user.email||'',attendance_days:r.days||[],guest_requested:Boolean(r.guestRequested),guest_name:r.guestName||'',guest_email:r.guestEmail||'',guest_status:r.guestRequested?'requested':'not-requested'}));
       await upsert('event_rsvps',rows,'event_id,user_id');send(res,200,{ok:true});return;
@@ -64,14 +62,13 @@ export default async function handler(req,res){
       await insert('benefit_events',[{benefit_id:payload.benefitId,user_id:actor.user.id,event_name:payload.eventName}]);send(res,200,{ok:true});return;
     }
     if(domain==='profile'){
-      const isMember=['founder','employee','student','unemployed'].includes(actor.role);const emailChanged=String(payload.email||'').toLowerCase()!==String(actor.user.email||'').toLowerCase();const phoneChanged=String(payload.phone||'')!==String(actor.profile.phone||'');
-      const record=snakeMember({...payload,id:actor.profile.id,role:actor.profile.role,status:actor.profile.status,verification:(isMember&&(emailChanged||phoneChanged))?'pending':actor.profile.verification});
-      if(isMember&&(emailChanged||phoneChanged)){record.onboarding_status='phone_pending';record.phone_verified_at=null;}
+      const emailChanged=String(payload.email||'').toLowerCase()!==String(actor.user.email||'').toLowerCase();const phoneChanged=String(payload.phone||'')!==String(actor.profile.phone||'');
+      const record=snakeMember({...payload,id:actor.profile.id,role:actor.profile.role,status:actor.profile.status,verification:actor.profile.verification});
       await update('profiles',`user_id=eq.${actor.user.id}`,record);
       if(payload.newPassword||emailChanged)await authAdmin(`/users/${actor.user.id}`,{method:'PUT',body:{...(payload.newPassword?{password:payload.newPassword}:{}),...(emailChanged?{email:payload.email,email_confirm:true}:{})}});
       if(emailChanged)await update('applications',`auth_user_id=eq.${actor.user.id}`,{email:payload.email});
       if(phoneChanged)await update('applications',`auth_user_id=eq.${actor.user.id}`,{phone:payload.phone});
-      send(res,200,{ok:true,requiresVerification:isMember&&(emailChanged||phoneChanged)});return;
+      send(res,200,{ok:true,requiresVerification:false});return;
     }
     if(domain==='usage-status'&&['partner','admin'].includes(actor.role)){
       const [log]=await select('usage_logs',`id=eq.${encodeURIComponent(payload.id)}&select=*`);if(!log||(actor.role==='partner'&&log.partner_id!==actor.partner.id))throw Object.assign(new Error('Forbidden'),{status:403});
@@ -89,7 +86,7 @@ export default async function handler(req,res){
       if(nextStatus==='approved'){
         if(!application.auth_user_id)throw Object.assign(new Error('Legacy application has no Auth user'),{status:409,publicMessage:'This older application must be resubmitted so the member can choose a secure password.'});
         const existing=await select('profiles',`user_id=eq.${encodeURIComponent(application.auth_user_id)}&select=*`);
-        if(!existing.length){const code=`FDRY-${({founder:'F',employee:'E',student:'S',unemployed:'O'})[application.role]||'M'}-${String(new Date().getFullYear()).slice(-2)}${Math.floor(1000+Math.random()*9000)}`;const data=application.data||{};await upsert('profiles',[{id:code,user_id:application.auth_user_id,email:application.email,name:application.name,phone:application.phone||data.phone||'',city:data.city||'',organization:data.company||data.organization||'',title:data.title||'',role:application.role,status:'active',verification:'pending',onboarding_status:'phone_pending',approved_at:new Date().toISOString(),approved_by:actor.user.id,expires:new Date(Date.now()+365*86400000).toISOString().slice(0,10),notes:'Created from approved membership application.',excluded_benefit_ids:[],preferences:{preferredOtpChannel:'telegram'}}]);
+        if(!existing.length){const code=`FDRY-${({founder:'F',employee:'E',student:'S',unemployed:'O'})[application.role]||'M'}-${String(new Date().getFullYear()).slice(-2)}${Math.floor(1000+Math.random()*9000)}`;const data=application.data||{};await upsert('profiles',[{id:code,user_id:application.auth_user_id,email:application.email,name:application.name,phone:application.phone||data.phone||'',city:data.city||'',organization:data.company||data.organization||'',title:data.title||'',role:application.role,status:'active',verification:'verified',onboarding_status:'complete',phone_verified_at:null,phone_verification_channel:null,approved_at:new Date().toISOString(),approved_by:actor.user.id,expires:new Date(Date.now()+365*86400000).toISOString().slice(0,10),notes:'Created from approved membership application.',excluded_benefit_ids:[],preferences:{}}]);
         }
         await authAdmin(`/users/${application.auth_user_id}`,{method:'PUT',body:{email_confirm:true,user_metadata:{role:application.role,application_id:application.id}}});
       }else if(nextStatus==='rejected'&&application.auth_user_id){
