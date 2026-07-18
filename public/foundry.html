@@ -100,7 +100,7 @@
                 <label>Password<input name="password" type="password" minlength="8" autocomplete="new-password" required /></label>
                 <label>Confirm password<input name="confirmPassword" type="password" minlength="8" autocomplete="new-password" required /></label>
                 <fieldset class="full-field verification-choice"><legend>Send the phone verification code through</legend><label><input type="radio" name="preferredOtpChannel" value="whatsapp" checked /><span>WhatsApp</span></label><label><input type="radio" name="preferredOtpChannel" value="telegram" /><span>Telegram</span></label></fieldset>
-                <p class="field-note full-field">Your password is stored only by the secure authentication service. Telegram verification works only when this phone is registered on Telegram.</p>
+                <p class="field-note full-field">Your password is stored only by the secure authentication service. By selecting a channel and requesting a code, you agree to receive one verification message there. Telegram works only when this phone is registered on Telegram.</p>
               </div>
             </section>
 
@@ -151,7 +151,7 @@
           <form id="phoneVerificationForm" class="auth-form">
             <label>Email address<input id="verificationEmail" name="email" type="email" autocomplete="email" required /></label>
             <label>Phone number<input id="verificationPhone" name="phone" type="tel" autocomplete="tel" placeholder="+251911234567" pattern="\+[1-9][0-9]{7,14}" required /></label>
-            <fieldset class="verification-choice compact"><legend>Receive code through</legend><label><input type="radio" name="channel" value="whatsapp" checked /><span>WhatsApp</span></label><label><input type="radio" name="channel" value="telegram" /><span>Telegram</span></label></fieldset>
+            <fieldset class="verification-choice compact"><legend>Receive code through</legend><label><input type="radio" name="channel" value="whatsapp" checked /><span>WhatsApp</span></label><label><input type="radio" name="channel" value="telegram" /><span>Telegram</span></label></fieldset><p class="field-note">Requesting a code confirms that you agree to receive one verification message through the selected channel.</p>
             <button class="secondary-button" type="button" id="saveVerificationContact">Save contact details</button>
             <button class="primary-button" type="button" id="sendPhoneCode">Send verification code <span>→</span></button>
             <div class="otp-entry hidden" id="otpEntry"><label>Verification code<input id="phoneOtpCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="000000" /></label><button class="primary-button" type="submit">Verify & enter <span>↗</span></button></div>

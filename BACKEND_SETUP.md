@@ -29,14 +29,17 @@ APP_URL=https://your-production-domain.example
 TWILIO_SENDGRID_API_KEY=your_sendgrid_api_key
 EMAIL_FROM=Foundry <members@your-verified-domain.example>
 
-TWILIO_ACCOUNT_SID=AC...
-TWILIO_AUTH_TOKEN=your_twilio_auth_token
-TWILIO_VERIFY_SERVICE_SID=VA...
+WHATSAPP_ACCESS_TOKEN=your_server-only-permanent-system-user-token
+WHATSAPP_PHONE_NUMBER_ID=your_meta_phone_number_id
+WHATSAPP_OTP_TEMPLATE_NAME=afrivault_verification_code
+WHATSAPP_TEMPLATE_LANGUAGE=en_US
+WHATSAPP_GRAPH_VERSION=v23.0
+OTP_HASH_SECRET=a_separate_random_secret_of_at_least_32_characters
 
 TELEGRAM_GATEWAY_TOKEN=your_telegram_gateway_token
 ```
 
-Never put the service-role key, Twilio token, SendGrid key, Telegram token, QR secret or account passwords in a public file or a `NEXT_PUBLIC_` variable.
+Never put the service-role key, Meta token, SendGrid key, Telegram token, OTP/QR secrets or account passwords in a public file or a `NEXT_PUBLIC_` variable.
 
 In Supabase Authentication → URL Configuration, set the Site URL to `APP_URL` and add the production/preview domains to Redirect URLs. Approval and email-change links depend on this.
 
@@ -63,11 +66,13 @@ Twilio SendGrid:
 - Create an API key with mail-send access.
 - Make `EMAIL_FROM` match the verified sender/domain.
 
-Twilio Verify WhatsApp:
+Meta WhatsApp Cloud API:
 
-- Create a Verify Service and copy its `VA...` SID.
-- Complete Twilio/Meta onboarding for your own WhatsApp sender.
-- Enable WhatsApp as a verification channel.
+- Create or connect a WhatsApp Business Account in a Meta app.
+- Register the production sender number and copy its Phone Number ID.
+- Create an `AUTHENTICATION` template with a copy-code OTP button, and set `WHATSAPP_OTP_TEMPLATE_NAME` to the approved template's exact name.
+- Use a permanent system-user token with `whatsapp_business_messaging` permission in production. Temporary dashboard tokens are suitable only for a short test.
+- The API generates a six-digit code and stores only its keyed HMAC hash. Never reuse `OTP_HASH_SECRET` as a public value.
 
 Telegram:
 
@@ -82,7 +87,7 @@ Telegram:
 3. The account remains email-unconfirmed and has no member profile until an administrator approves it.
 4. Approval creates the member profile and sends a SendGrid approval/verification link.
 5. Clicking the link verifies the email and opens the phone-verification screen.
-6. WhatsApp codes use Twilio Verify; Telegram codes use Telegram Gateway.
+6. WhatsApp codes use Meta Cloud API; Telegram codes use Telegram Gateway.
 7. Only a member with an active profile, verified email and verified phone can load benefits/events or generate a QR pass.
 8. Changing email or phone resets the corresponding verification gate.
 

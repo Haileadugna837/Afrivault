@@ -1,3 +1,5 @@
+import {createHmac,randomInt,timingSafeEqual} from 'node:crypto';
+
 const required=(name)=>{const value=process.env[name];if(!value)throw Object.assign(new Error(`${name} is not configured`),{status:503,publicMessage:'This verification channel is not configured yet'});return value};
 
 export function normalizePhone(value){
@@ -6,29 +8,48 @@ export function normalizePhone(value){
   return phone;
 }
 
-async function twilioRequest(path,values){
-  const sid=required('TWILIO_ACCOUNT_SID');
-  const token=required('TWILIO_AUTH_TOKEN');
-  const response=await fetch(`https://verify.twilio.com/v2${path}`,{
+export function createOtpCode(){
+  return String(randomInt(0,1000000)).padStart(6,'0');
+}
+
+export function hashOtpCode(userId,phone,code){
+  return createHmac('sha256',required('OTP_HASH_SECRET')).update(`${userId}:${normalizePhone(phone)}:${String(code)}`).digest('hex');
+}
+
+export function checkWhatsAppCode(userId,phone,code,expectedHash){
+  if(!/^[a-f0-9]{64}$/i.test(String(expectedHash||'')))return false;
+  const actual=Buffer.from(hashOtpCode(userId,phone,code),'hex');
+  const expected=Buffer.from(expectedHash,'hex');
+  return actual.length===expected.length&&timingSafeEqual(actual,expected);
+}
+
+export async function sendWhatsAppCode(phone,code){
+  const token=required('WHATSAPP_ACCESS_TOKEN');
+  const phoneNumberId=required('WHATSAPP_PHONE_NUMBER_ID');
+  const templateName=required('WHATSAPP_OTP_TEMPLATE_NAME');
+  const version=/^v\d+\.\d+$/.test(process.env.WHATSAPP_GRAPH_VERSION||'')?process.env.WHATSAPP_GRAPH_VERSION:'v23.0';
+  const response=await fetch(`https://graph.facebook.com/${version}/${encodeURIComponent(phoneNumberId)}/messages`,{
     method:'POST',
-    headers:{authorization:`Basic ${Buffer.from(`${sid}:${token}`).toString('base64')}`,'content-type':'application/x-www-form-urlencoded'},
-    body:new URLSearchParams(values)
+    headers:{authorization:`Bearer ${token}`,'content-type':'application/json'},
+    body:JSON.stringify({
+      messaging_product:'whatsapp',
+      recipient_type:'individual',
+      to:phone.replace(/^\+/,''),
+      type:'template',
+      template:{
+        name:templateName,
+        language:{code:process.env.WHATSAPP_TEMPLATE_LANGUAGE||'en_US'},
+        components:[
+          {type:'body',parameters:[{type:'text',text:String(code)}]},
+          {type:'button',sub_type:'url',index:'0',parameters:[{type:'text',text:String(code)}]}
+        ]
+      }
+    })
   });
   const data=await response.json().catch(()=>({}));
-  if(!response.ok)throw Object.assign(new Error(JSON.stringify(data)),{status:502,publicMessage:'WhatsApp could not send or verify the code. Please try again.'});
-  return data;
-}
-
-export async function sendWhatsAppCode(phone){
-  const service=required('TWILIO_VERIFY_SERVICE_SID');
-  const data=await twilioRequest(`/Services/${encodeURIComponent(service)}/Verifications`,{To:phone,Channel:'whatsapp'});
-  return {requestId:data.sid,status:data.status};
-}
-
-export async function checkWhatsAppCode(phone,code){
-  const service=required('TWILIO_VERIFY_SERVICE_SID');
-  const data=await twilioRequest(`/Services/${encodeURIComponent(service)}/VerificationCheck`,{To:phone,Code:String(code)});
-  return data.status==='approved';
+  const requestId=data.messages?.[0]?.id;
+  if(!response.ok||!requestId)throw Object.assign(new Error(JSON.stringify(data)),{status:502,publicMessage:'WhatsApp could not send the code. Confirm the Meta sender and authentication template are active, then try again.'});
+  return {requestId,status:'sent'};
 }
 
 async function telegramRequest(method,payload){

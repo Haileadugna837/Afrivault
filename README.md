@@ -13,7 +13,7 @@ The repository includes a production-ready backend foundation:
 - Vercel Node.js functions for privileged operations
 - Two-minute server-signed membership QR tokens and partner verification logs
 - Twilio SendGrid email queue and approval delivery
-- Twilio Verify WhatsApp and Telegram Gateway phone verification
+- Direct Meta WhatsApp Cloud API and Telegram Gateway phone verification
 - Server-side event weather proxy using Open-Meteo
 - Local prototype fallback when backend environment variables are absent
 
