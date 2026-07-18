@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=5.6.1" />
+    <link rel="stylesheet" href="styles.css?v=6.0.0" />
   </head>
   <body>
     <div class="ambient ambient-one"></div>
@@ -54,11 +54,16 @@
           <form id="loginForm" class="auth-form">
             <label>Email address<input id="loginEmail" type="email" placeholder="you@company.com" autocomplete="email" required /></label>
             <label>Password<div class="password-field"><input id="loginPassword" type="password" placeholder="Enter password" autocomplete="current-password" required /><button type="button" id="togglePassword">Show</button></div></label>
-            <div class="form-row"><label class="check-label"><input type="checkbox" checked /><span>Remember me</span></label><button type="button" class="inline-button" data-toast="Password reset link sent">Forgot password?</button></div>
+            <div class="form-row"><label class="check-label"><input type="checkbox" checked /><span>Remember me</span></label><button type="button" class="inline-button" id="forgotPassword">Forgot password?</button></div>
             <p class="form-error" id="loginError"></p>
             <button class="primary-button" type="submit">Enter member space <span>↗</span></button>
           </form>
           <p class="auth-switch">Not a member? <button data-auth-go="apply">Apply to join</button></p>
+        </div>
+
+        <div class="auth-view" data-auth-view="reset-password">
+          <p class="eyebrow">SECURE ACCOUNT</p><h2>Choose a new password.</h2><p class="auth-lead">Use at least eight characters with letters and numbers.</p>
+          <form id="resetPasswordForm" class="auth-form"><label>New password<input name="password" type="password" minlength="8" required /></label><label>Confirm password<input name="confirmPassword" type="password" minlength="8" required /></label><p class="form-error" id="resetPasswordError"></p><button class="primary-button" type="submit">Update password <span>↗</span></button></form>
         </div>
 
         <div class="auth-view" data-auth-view="demo">
@@ -182,7 +187,7 @@
         <section class="profile-access"><div><span>MEMBERSHIP TYPE</span><h3 data-role-label>Founder</h3></div><div><span>AVAILABLE BENEFITS</span><h3 id="profileBenefitCount">8</h3></div></section>
         <div class="menu-group"><p>MEMBERSHIP</p><button data-go="card"><span class="menu-icon">▣</span><div><b>Digital member card</b><small>Active until July 2027</small></div><i>›</i></button><button id="profileSaved"><span class="menu-icon">♡</span><div><b>Saved benefits</b><small id="savedCountLabel">0 offers saved</small></div><i>›</i></button><button data-toast="Your profile is already verified"><span class="menu-icon">✓</span><div><b>Verification status</b><small>Approved member</small></div><i>›</i></button></div>
         <div class="menu-group"><p>ACCOUNT</p><button id="memberAccountSettings"><span class="menu-icon">⚙</span><div><b>Account settings</b><small>Edit profile, password and notifications</small></div><i>›</i></button><button id="switchAccount"><span class="menu-icon">⇄</span><div><b>Switch demo account</b><small>Compare another membership type</small></div><i>›</i></button><button id="logoutButton"><span class="menu-icon danger-icon">↗</span><div><b>Sign out</b><small>Return to member login</small></div><i>›</i></button></div>
-        <p class="version">FOUNDRY MEMBER APP · V5.6.1</p>
+        <p class="version">FOUNDRY MEMBER APP · V6.0.0</p>
       </section>
 
       <nav class="bottom-nav" aria-label="Main navigation"><button class="active" data-go="home"><svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"></path></svg><span>Home</span></button><button data-go="events"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M7 3v4M17 3v4M3 10h18M8 14h3M14 14h2M8 17h2"></path></svg><span>Events</span></button><button data-go="benefits"><svg viewBox="0 0 24 24"><path d="M20 12v8H4v-8M2 7h20v5H2zM12 20V7M12 7H7.5A2.5 2.5 0 1 1 10 4.5C10 7 12 7 12 7ZM12 7h4.5A2.5 2.5 0 1 0 14 4.5C14 7 12 7 12 7Z"></path></svg><span>Benefits</span></button><button class="card-nav" data-go="connections"><i><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"></circle><circle cx="17" cy="10" r="3"></circle><path d="M2.5 20a5.5 5.5 0 0 1 11 0M13 20a4.5 4.5 0 0 1 9 0"></path></svg></i><span>Match</span></button><button data-go="profile"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><span>Profile</span></button></nav>
@@ -223,9 +228,11 @@
     <div class="toast" id="toast"><span>✓</span><p>Done</p></div>
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="config.js?v=6.0.0"></script>
+    <script src="backend.js?v=6.0.0"></script>
     <script src="vendor/xlsx.full.min.js?v=4.0.0"></script>
     <script src="vendor/qrcode.js?v=4.0.0"></script>
     <script src="vendor/jsQR.js?v=4.0.0"></script>
-    <script src="app.js?v=5.6.1"></script>
+    <script src="app.js?v=6.0.0"></script>
   </body>
 </html>

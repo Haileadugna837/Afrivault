@@ -1,6 +1,22 @@
 # Foundry Private Community App
 
-A mobile-first Telegram Web App prototype for an application-only business community with role-based memberships and benefits.
+A responsive Telegram Web App and desktop portal for an application-only business community with role-based memberships, benefits, events and partner verification.
+
+## Production backend
+
+The repository includes a production-ready backend foundation:
+
+- Supabase PostgreSQL schema, seed data and Row Level Security
+- Supabase email/password authentication and persistent sessions
+- Supabase Storage for benefit, event, speaker and sponsor images
+- Cross-device member, benefit, event, RSVP and partner data
+- Vercel Node.js functions for privileged operations
+- Two-minute server-signed membership QR tokens and partner verification logs
+- Resend email queue and delivery integration
+- Server-side event weather proxy using Open-Meteo
+- Local prototype fallback when backend environment variables are absent
+
+See [`BACKEND_SETUP.md`](BACKEND_SETUP.md) for the integration steps.
 
 ## Demo accounts
 
@@ -31,4 +47,4 @@ npm run dev
 - Admin settings cover profile details, passwords, two-step verification, session timeout, notifications and community defaults.
 - Custom benefits, applications and saved offers persist in browser storage.
 
-Production authentication, application review, partner claims and signed QR verification require backend integration.
+OpenAI community matching is intentionally not included.

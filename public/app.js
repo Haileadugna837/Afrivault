@@ -103,6 +103,9 @@ const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const titleCase = value => String(value || '').replace(/\b\w/g, c => c.toUpperCase());
 const generatePassword = () => `Fdy-${Math.random().toString(36).slice(2,7)}-${Math.floor(100 + Math.random() * 900)}!`;
+const backend = window.FoundryBackend;
+const backendEnabled = () => Boolean(backend?.configured?.());
+const syncBackend = (domain,payload) => backendEnabled() ? backend.sync(domain,payload).catch(error => console.error(`Sync failed: ${domain}`,error)) : Promise.resolve();
 
 let currentUser = null;
 let offers = loadOffers();
@@ -163,6 +166,7 @@ function loadEvents() {
 
 function saveEvents(events) {
   localStorage.setItem('foundry-events', JSON.stringify(events));
+  syncBackend('events', events);
 }
 
 function loadEventRsvps() {
@@ -173,6 +177,7 @@ function loadEventRsvps() {
 
 function saveEventRsvps(rsvps) {
   if (currentUser?.email) localStorage.setItem(`foundry-event-rsvps-${currentUser.email}`, JSON.stringify(rsvps));
+  syncBackend('rsvps', rsvps);
 }
 
 function eventRsvpRecord(item) {
@@ -209,6 +214,7 @@ function loadCategories() {
 
 function saveCategories(categories) {
   localStorage.setItem('foundry-benefit-categories', JSON.stringify(categories));
+  syncBackend('categories', categories);
 }
 
 function categoryById(id) {
@@ -224,6 +230,7 @@ function loadPartners() {
 
 function savePartners(partners) {
   localStorage.setItem('foundry-partners', JSON.stringify(partners));
+  if (currentUser?.role === 'admin') syncBackend('partners', partners);
 }
 
 function loadUsageLogs() {
@@ -235,6 +242,7 @@ function loadUsageLogs() {
 
 function saveUsageLogs(logs) {
   localStorage.setItem('foundry-usage-logs', JSON.stringify(logs));
+  if (currentUser?.role === 'admin') syncBackend('usage-logs', logs);
 }
 
 function getBenefitClaims(id) {
@@ -255,6 +263,7 @@ function loadMembers() {
 
 function saveMembers(members) {
   localStorage.setItem('foundry-members', JSON.stringify(members));
+  if (currentUser?.role === 'admin') syncBackend('members', members);
 }
 
 function getMemberByEmail(email) {
@@ -276,6 +285,7 @@ function trackBenefitEvent(id, eventName = 'click') {
   const data = JSON.parse(localStorage.getItem(key) || '{}');
   data[id] = (data[id] || 0) + 1;
   localStorage.setItem(key, JSON.stringify(data));
+  syncBackend('benefit-event', {benefitId:id,eventName});
 }
 
 function tgHaptic(type = 'light') {
@@ -324,6 +334,20 @@ function authenticate(email, password) {
   return expectedPassword && expectedPassword === password ? {...demo,...member,role:member.role,email:member.email,name:member.name,id:member.id,subtitle:`${member.title} · ${member.organization}`} : null;
 }
 
+async function performLogin(email,password) {
+  $('#loginError').textContent='';
+  try {
+    const account=backendEnabled()?await backend.signIn(email.trim().toLowerCase(),password):authenticate(email,password);
+    if(!account)throw new Error('The email or password is incorrect.');
+    offers=loadOffers();signIn(account);
+  } catch(error) { $('#loginError').textContent=error.message||'Sign-in failed. Check your details and try again.'; }
+}
+
+async function refreshRemoteData(){
+  if(!backendEnabled()||!currentUser||$('.admin-modal[aria-hidden="false"]'))return;
+  try{await backend.bootstrap();offers=loadOffers();if(currentUser.role==='admin')renderAdmin();else if(currentUser.role==='partner')renderPartnerApp(false);else{const member=getMemberByEmail(currentUser.email);if(member)currentUser={...currentUser,...member,subtitle:`${member.title} · ${member.organization}`};renderMemberExperience();}}catch(error){console.error('Background refresh failed',error)}
+}
+
 function signIn(account) {
   const member = ['admin','partner'].includes(account.role) ? null : getMemberByEmail(account.email);
   if (member?.status && member.status !== 'active') {
@@ -356,6 +380,7 @@ function signIn(account) {
 }
 
 function signOut(destination = 'login') {
+  backend?.signOut?.();
   currentUser = null;
   sessionStorage.removeItem('foundry-session');
   $('#memberApp').classList.add('hidden');
@@ -445,7 +470,7 @@ function saveMemberSettings(event) {
   const currentPassword = members[index].password || demoAccounts.find(account => account.id === members[index].id)?.password || '';
   const newPassword = data.get('newPassword').trim();
   if (newPassword) {
-    if (data.get('currentPassword') !== currentPassword) { $('#memberSecurityError').textContent = 'Current password is incorrect.'; return; }
+    if (!backendEnabled() && data.get('currentPassword') !== currentPassword) { $('#memberSecurityError').textContent = 'Current password is incorrect.'; return; }
     if (newPassword !== data.get('confirmPassword')) { $('#memberSecurityError').textContent = 'New passwords do not match.'; return; }
     if (!/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) { $('#memberSecurityError').textContent = 'Use at least one letter and one number.'; return; }
   }
@@ -453,6 +478,7 @@ function saveMemberSettings(event) {
     ...members[index], name:data.get('name').trim(), email, phone:data.get('phone').trim(), city:data.get('city').trim(), organization:data.get('organization').trim(), title:data.get('title').trim(), language:data.get('language'), twoFactor:data.get('twoFactor') === 'on', emailAlerts:data.get('emailAlerts') === 'on', telegramAlerts:data.get('telegramAlerts') === 'on', usageReceipts:data.get('usageReceipts') === 'on', ...(newPassword ? {password:newPassword} : {})
   };
   saveMembers(members);
+  syncBackend('profile', {...members[index],...(newPassword ? {newPassword} : {})});
   currentUser = {...currentUser,...members[index],subtitle:`${members[index].title} · ${members[index].organization}`};
   sessionStorage.setItem('foundry-session', email);
   closeAdminModal('memberSettingsModal');
@@ -585,10 +611,8 @@ async function renderEventWeather(item) {
     const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
     let forecast = cached?.expires > Date.now() ? cached.data : null;
     if (!forecast) {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,wind_speed_10m&timezone=${encodeURIComponent(item.timezone || 'auto')}&forecast_days=16`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Weather service unavailable');
-      forecast = await response.json();
+      if (backendEnabled()) forecast = await backend.weather(latitude,longitude,new Date(item.startAt).toISOString().slice(0,10));
+      else { const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,wind_speed_10m&timezone=${encodeURIComponent(item.timezone || 'auto')}&forecast_days=16`;const response = await fetch(url);if (!response.ok) throw new Error('Weather service unavailable');forecast = await response.json(); }
       localStorage.setItem(cacheKey, JSON.stringify({expires:Date.now() + 60 * 60 * 1000,data:forecast}));
     }
     const localHour = new Intl.DateTimeFormat('sv-SE', {timeZone:item.timezone || 'UTC',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).format(new Date(item.startAt)).replace(' ','T').slice(0,13);
@@ -764,6 +788,7 @@ function setEventRsvp(status) {
   const defaultDays=eventDays(activeEvent).map(day=>day.value);
   rsvps[activeEvent.id] = {status,email:existing?.email || currentUser?.email || '',days:existing?.days?.length?existing.days:defaultDays,guestRequested:existing?.guestRequested || false,guestName:existing?.guestName || '',guestEmail:existing?.guestEmail || '',updatedAt:new Date().toISOString()};
   saveEventRsvps(rsvps);
+  if(status==='going'||status==='cancelled')backend?.sendEmail?.(rsvps[activeEvent.id].email,status==='going'?'rsvp-confirmation':'rsvp-cancelled',{eventTitle:activeEvent.title,dateLabel:eventDateLabel(activeEvent.startAt,true),location:eventLocation(activeEvent),manageUrl:location.href}).catch(()=>{});
   updateEventRsvpButtons();
   renderHomeEvents();
   renderMemberEvents();
@@ -839,8 +864,9 @@ function saveCalendarEmail(event){
   closeAdminModal('eventEmailModal');const type=pendingCalendarType;pendingCalendarType=null;if(type)addEventToCalendar(type);
 }
 
-function openGuestRegistration(id){
-  const item=loadEvents().find(eventItem=>eventItem.id===id&&eventItem.status==='published'&&eventItem.openRegistration);
+async function openGuestRegistration(id){
+  let item=loadEvents().find(eventItem=>eventItem.id===id&&eventItem.status==='published'&&eventItem.openRegistration);
+  if(!item&&backendEnabled()){try{item=await backend.publicEvent(id)}catch(_){}}
   showAuthView('guest-event');
   if(!item){$('#guestEventTitle').textContent='Registration unavailable';$('#guestEventSummary').textContent='This event is not available for open guest registration on this device.';$('#guestEventRegistrationForm').classList.add('hidden');return;}
   activeEvent=item;$('#guestEventRegistrationForm').classList.remove('hidden');$('#guestEventTitle').textContent=item.title;$('#guestEventSummary').textContent=`${item.summary} · ${eventDateLabel(item.startAt,true)}`;$('#guestEventRegistrationForm').elements.eventId.value=item.id;
@@ -854,6 +880,7 @@ function submitGuestRegistration(event){
   const registrations=JSON.parse(localStorage.getItem('foundry-guest-registrations')||'[]');
   const registration={id:`GUEST-${Date.now()}`,eventId:activeEvent.id,name:data.get('name').trim(),email:data.get('email').trim().toLowerCase(),phone:data.get('phone').trim(),days:days.length?days:eventDays(activeEvent).map(day=>day.value),status:'going',createdAt:new Date().toISOString()};
   registrations.push(registration);localStorage.setItem('foundry-guest-registrations',JSON.stringify(registrations));guestRegistrationEmail=registration.email;
+  syncBackend('guest-registration',registration);
   event.currentTarget.classList.add('hidden');$('#guestRegistrationSuccess').classList.remove('hidden');$('#guestRegistrationError').textContent='';
 }
 
@@ -887,6 +914,7 @@ function toggleSave(id) {
   if (saved.has(id)) { saved.delete(id); showToast('Removed from saved'); }
   else { saved.add(id); showToast('Benefit saved'); }
   localStorage.setItem(`foundry-saved-${currentUser.email}`, JSON.stringify([...saved]));
+  syncBackend('saved', [...saved]);
   tgHaptic('medium');
   renderBenefits();
   if (activeOffer?.id === id) $('#saveOffer').classList.toggle('saved', saved.has(id));
@@ -964,9 +992,10 @@ function createQrPayload(member) {
   return `${body}|${verificationHash(body)}`;
 }
 
-function generateMemberQr() {
+async function generateMemberQr() {
   if (!currentUser || !memberTypes[currentUser.role]) return;
-  activeQrCode = createQrPayload(currentUser);
+  try { activeQrCode = backendEnabled() ? (await backend.issueQr()).token : createQrPayload(currentUser); }
+  catch (error) { showToast(error.message || 'Could not refresh QR'); return; }
   const qr = window.qrcode(0, 'M');
   qr.addData(activeQrCode);
   qr.make();
@@ -1049,8 +1078,10 @@ function submitApplication() {
   const data = Object.fromEntries(new FormData($('#applicationForm')).entries());
   const reference = `FDRY-AP-${String(Math.floor(1000 + Math.random() * 9000))}`;
   const stored = JSON.parse(localStorage.getItem('foundry-applications') || '[]');
-  stored.unshift({ id:reference.replace('FDRY-',''), name:`${data.firstName} ${data.lastName}`, initials:`${data.firstName[0]}${data.lastName[0]}`.toUpperCase(), role:data.memberRole, detail:`${data.title}${data.company ? ` · ${data.company}` : ''}`, submitted:'Just now', status:'pending' });
+  const application={ id:reference.replace('FDRY-',''), email:data.email, name:`${data.firstName} ${data.lastName}`, initials:`${data.firstName[0]}${data.lastName[0]}`.toUpperCase(), role:data.memberRole, detail:`${data.title}${data.company ? ` · ${data.company}` : ''}`, submitted:'Just now', submittedAt:new Date().toISOString(), status:'pending', data };
+  stored.unshift(application);
   localStorage.setItem('foundry-applications', JSON.stringify(stored));
+  syncBackend('application',application);
   $('#applicationReference').textContent = reference;
   showAuthView('submitted');
   tgHaptic('heavy');
@@ -1201,6 +1232,7 @@ function deleteCurrentEvent() {
   const item = loadEvents().find(eventItem => eventItem.id === id);
   if (!item || !window.confirm(`Delete “${item.title}”? Existing local RSVP records will no longer be shown.`)) return;
   saveEvents(loadEvents().filter(eventItem => eventItem.id !== id));
+  syncBackend('delete-event',{id});
   pendingEventImage = null;
   renderAdminEvents();
   adminNavigate('events');
@@ -1414,6 +1446,7 @@ function addCategory(event) {
 function deleteCategory(id) {
   if (offers.some(offer => offer.category === id)) return showToast('Reassign its benefits before deleting');
   saveCategories(loadCategories().filter(category => category.id !== id));
+  syncBackend('delete-category',{id});
   populateCategorySelects(); renderCategoryEditor(); renderAdminBenefits(); renderOverviewAnalytics();
   showToast('Category deleted');
 }
@@ -1460,6 +1493,7 @@ function saveBenefitEdit(event) {
   overrides[id] = { brand:data.get('brand').trim(), title:data.get('title').trim(), category:data.get('category'), label:categoryById(data.get('category')).name.toUpperCase(), value:data.get('value').trim(), description:data.get('description').trim(), partnershipDescription:data.get('partnershipDescription').trim(), companyDescription:data.get('companyDescription').trim(), gallery:[...pendingEditGallery], status:data.get('status'), color:data.get('color'), eligibility, featured:data.get('featured') === 'on', visualMode, image:visualMode === 'image' ? pendingEditImage : null };
   localStorage.setItem('foundry-benefit-overrides', JSON.stringify(overrides));
   offers = loadOffers();
+  syncBackend('benefits', offers);
   closeAdminModal('benefitEditModal');
   renderAdminBenefits();
   renderOverviewAnalytics();
@@ -1482,6 +1516,7 @@ function deleteCurrentBenefit() {
   const partners = loadPartners().map(partner => ({...partner, benefitIds:(partner.benefitIds || []).filter(benefitId => benefitId !== id)}));
   savePartners(partners);
   offers = loadOffers();
+  syncBackend('delete-benefit',{id});
   closeAdminModal('benefitEditModal');
   renderAdminBenefits(); renderOverviewAnalytics(); renderDistribution(); renderAdminPartners();
   showToast('Benefit deleted');
@@ -1490,7 +1525,8 @@ function deleteCurrentBenefit() {
 function allApplications() {
   const stored = JSON.parse(localStorage.getItem('foundry-applications') || '[]');
   const statuses = JSON.parse(localStorage.getItem('foundry-application-statuses') || '{}');
-  return [...stored, ...seedApplications].map(app => ({...app, status:statuses[app.id] || app.status}));
+  const merged=[...stored,...seedApplications].filter((app,index,list)=>list.findIndex(item=>item.id===app.id)===index);
+  return merged.map(app => ({...app, status:statuses[app.id] || app.status}));
 }
 
 function renderApplications() {
@@ -1502,6 +1538,7 @@ function setApplicationStatus(id, status) {
   const statuses = JSON.parse(localStorage.getItem('foundry-application-statuses') || '{}');
   statuses[id] = status;
   localStorage.setItem('foundry-application-statuses', JSON.stringify(statuses));
+  syncBackend('application-status',{id,status});
   renderApplications();
   renderAdmin();
   adminNavigate('applications');
@@ -1553,8 +1590,8 @@ function updateCreateVisualMode() {
   $('#createImageField').classList.toggle('hidden', mode !== 'image');
 }
 
-function readImageFile(file) {
-  return new Promise((resolve,reject) => {
+async function readImageFile(file,bucket='benefit-images',folder='uploads') {
+  const dataUrl = await new Promise((resolve,reject) => {
     if (!file) return resolve(null);
     if (!['image/png','image/jpeg','image/webp'].includes(file.type)) return reject(new Error('Use a JPG, PNG or WebP image.'));
     if (file.size > 1.5 * 1024 * 1024) return reject(new Error('Image must be smaller than 1.5 MB.'));
@@ -1563,6 +1600,7 @@ function readImageFile(file) {
     reader.onerror = () => reject(new Error('The image could not be read.'));
     reader.readAsDataURL(file);
   });
+  return dataUrl && backendEnabled() ? backend.uploadImage(dataUrl,bucket,folder) : dataUrl;
 }
 
 function optimizeGalleryImage(file) {
@@ -1596,7 +1634,8 @@ async function addGalleryFiles(mode, fileList) {
   const error = mode === 'create' ? $('#createGalleryError') : $('#editGalleryError');
   if (current.length + files.length > 5) { error.textContent = 'Use up to 5 company images per benefit.'; return; }
   try {
-    const optimized = await Promise.all(files.map(optimizeGalleryImage));
+    const optimizedData = await Promise.all(files.map(optimizeGalleryImage));
+    const optimized = backendEnabled() ? await Promise.all(optimizedData.map(image=>backend.uploadImage(image,'benefit-images','galleries'))) : optimizedData;
     current.push(...optimized);
     error.textContent = '';
     renderAdminGallery(mode);
@@ -1629,6 +1668,7 @@ function createBenefit(event) {
     savePartners(partners);
   }
   offers = loadOffers();
+  syncBackend('benefits', offers).then(()=>createPartner&&syncBackend('partners',loadPartners()));
   form.reset();
   form.elements.color.value = '#c8fa48';
   pendingCreateImage = null;
@@ -1751,7 +1791,13 @@ function closePartnerScanner() {
   closeAdminModal('partnerScannerModal');
 }
 
-function verifyPartnerCode(code) {
+async function verifyPartnerCode(code) {
+  if (backendEnabled()) {
+    try {
+      stopPartnerScanner();const result=await backend.verifyQr(code);const member=result.member;const validBenefits=result.eligibleBenefits||[];const log={id:result.log.id,partnerId:result.log.partnerId,benefitId:result.log.benefitId,memberId:member.id,verifiedAt:result.log.verifiedAt,status:'verified',updatedAt:new Date().toISOString()};const logs=loadUsageLogs();logs.unshift(log);localStorage.setItem('foundry-usage-logs',JSON.stringify(logs));
+      $('#scannerError').textContent='';$('#partnerVerificationResult').classList.remove('hidden');$('#partnerVerificationResult').innerHTML=`<div class="verification-success">✓</div><p class="eyebrow">ACTIVE MEMBER</p><h3>${escapeHtml(member.name)}</h3><p>${escapeHtml(memberTypes[member.role].tier)} · ${escapeHtml(member.id)}</p><label>Eligible benefit<select id="verifiedBenefitSelect">${validBenefits.map(item=>`<option value="${escapeHtml(item.id)}" ${item.id===log.benefitId?'selected':''}>${escapeHtml(item.title)}</option>`).join('')}</select></label><div class="verification-actions"><button type="button" data-verification-outcome="redeemed" data-log-id="${escapeHtml(log.id)}">Mark redeemed</button><button type="button" data-verification-outcome="not_used" data-log-id="${escapeHtml(log.id)}">Not used</button><button type="button" data-verification-outcome="rejected" data-log-id="${escapeHtml(log.id)}">Reject</button></div><small>Secure server verification was logged automatically.</small>`;renderPartnerApp(false);return;
+    } catch (error) { $('#scannerError').textContent=error.message||'Verification failed';lastScannedCode='';return; }
+  }
   const parsed = parseMemberQr(code);
   if (parsed.error) { $('#scannerError').textContent = parsed.error; lastScannedCode = ''; scannerFrame = requestAnimationFrame(scanPartnerFrame); return; }
   stopPartnerScanner();
@@ -1775,6 +1821,7 @@ function updateUsageStatus(id, status, benefitId = null) {
   log.status = status; log.updatedAt = new Date().toISOString();
   if (benefitId) log.benefitId = benefitId;
   saveUsageLogs(logs);
+  syncBackend('usage-status',{id,status,benefitId:benefitId||log.benefitId});
   renderPartnerApp(false); renderAdminPartners(); renderOverviewAnalytics(); renderAdminBenefits();
   showToast(`Usage marked ${usageStatusLabel(status).toLowerCase()}`);
 }
@@ -1789,7 +1836,7 @@ function savePartnerAccount(event) {
   if (partners.some(item => item.id !== partner.id && item.email.toLowerCase() === email)) return showToast('That email is already in use');
   partner.company = data.get('company').trim(); partner.contactName = data.get('contactName').trim(); partner.email = email;
   if (data.get('password').trim()) partner.password = data.get('password').trim();
-  savePartners(partners); currentUser = {...currentUser,...partner,name:partner.company}; sessionStorage.setItem('foundry-session', partner.email);
+  savePartners(partners); syncBackend('partner-profile',{...partner,newPassword:data.get('password').trim()}); currentUser = {...currentUser,...partner,name:partner.company}; sessionStorage.setItem('foundry-session', partner.email);
   renderPartnerApp(false); renderDemoAccounts(); showToast('Partner account updated');
 }
 
@@ -1816,6 +1863,7 @@ function saveSettingsSection(section, values) {
   const settings = JSON.parse(localStorage.getItem('foundry-admin-settings') || '{}');
   settings[section] = values;
   localStorage.setItem('foundry-admin-settings', JSON.stringify(settings));
+  syncBackend('settings',settings);
   $('#settingsSaved').textContent = 'Saved just now';
   showToast('Admin settings saved');
   loadAdminSettings();
@@ -1933,7 +1981,7 @@ document.addEventListener('click', event => {
     const demoPassword = demoAccount?.role === 'admin' ? (localStorage.getItem('foundry-admin-password') || 'demo123') : demoAccount?.password || 'demo123';
     $('#loginEmail').value = demo.dataset.demoEmail;
     $('#loginPassword').value = demoPassword;
-    return signIn(authenticate(demo.dataset.demoEmail, demoPassword));
+    return performLogin(demo.dataset.demoEmail, demoPassword);
   }
   const applicationAction = event.target.closest('[data-application-action]');
   if (applicationAction) return setApplicationStatus(applicationAction.dataset.applicationId, applicationAction.dataset.applicationAction);
@@ -1984,15 +2032,13 @@ document.addEventListener('change', event => {
   const personImage = event.target.closest('[data-person-image]');
   if (personImage) {
     const index = Number(personImage.dataset.personImage);
-    readImageFile(personImage.files[0]).then(image => { if (editingEventPeople[index]) editingEventPeople[index].image = image; renderEventPeopleEditor(); }).catch(error => showToast(error.message));
+    readImageFile(personImage.files[0],'event-images','people').then(image => { if (editingEventPeople[index]) editingEventPeople[index].image = image; renderEventPeopleEditor(); }).catch(error => showToast(error.message));
   }
 });
 
-$('#loginForm').addEventListener('submit', event => {
+$('#loginForm').addEventListener('submit', async event => {
   event.preventDefault();
-  const account = authenticate($('#loginEmail').value, $('#loginPassword').value);
-  if (!account) { $('#loginError').textContent = 'The email or password is incorrect. Try a demo account below.'; return; }
-  signIn(account);
+  await performLogin($('#loginEmail').value,$('#loginPassword').value);
 });
 
 $('#togglePassword').addEventListener('click', event => {
@@ -2000,6 +2046,8 @@ $('#togglePassword').addEventListener('click', event => {
   input.type = input.type === 'password' ? 'text' : 'password';
   event.currentTarget.textContent = input.type === 'password' ? 'Show' : 'Hide';
 });
+$('#forgotPassword').addEventListener('click',async()=>{const email=$('#loginEmail').value.trim().toLowerCase();if(!email)return $('#loginError').textContent='Enter your email address first.';if(!backendEnabled())return showToast('Password reset requires the connected backend');try{await backend.requestPasswordReset(email);showToast('Password reset email sent')}catch(error){$('#loginError').textContent=error.message}});
+$('#resetPasswordForm').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,password=form.elements.password.value;if(password!==form.elements.confirmPassword.value)return $('#resetPasswordError').textContent='Passwords do not match.';if(!/[A-Za-z]/.test(password)||!/[0-9]/.test(password))return $('#resetPasswordError').textContent='Include at least one letter and one number.';try{await backend.updatePassword(password);$('#resetPasswordError').textContent='';showToast('Password updated');showAuthView('login')}catch(error){$('#resetPasswordError').textContent=error.message}});
 
 $('#copyDemoPassword').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText('demo123'); showToast('Demo password copied'); }
@@ -2075,17 +2123,17 @@ $('#adminEventForm').addEventListener('submit', saveEvent);
 $('#cancelEvent').addEventListener('click', () => adminNavigate('events'));
 $('#deleteEvent').addEventListener('click', deleteCurrentEvent);
 $('#eventCoverImage').addEventListener('change', async event => {
-  try { pendingEventImage = await readImageFile(event.target.files[0]); $('#eventFormError').textContent = ''; $('#eventImageName').textContent = event.target.files[0]?.name || 'Cover image selected'; updateEventPreview(); }
+  try { pendingEventImage = await readImageFile(event.target.files[0],'event-images','covers'); $('#eventFormError').textContent = ''; $('#eventImageName').textContent = event.target.files[0]?.name || 'Cover image selected'; updateEventPreview(); }
   catch (error) { pendingEventImage = null; event.target.value = ''; $('#eventFormError').textContent = error.message; }
 });
 $('#createPartnerToggle').addEventListener('change', event => { $('#partnerCreateFields').classList.toggle('hidden', !event.target.checked); updateBenefitPreview(); });
 $('#generatePartnerPassword').addEventListener('click', () => { $('#createBenefitForm').elements.partnerPassword.value = generatePassword(); updateBenefitPreview(); });
 $('#createBenefitImage').addEventListener('change', async event => {
-  try { pendingCreateImage = await readImageFile(event.target.files[0]); $('#createImageError').textContent = ''; $('#createImageName').textContent = event.target.files[0]?.name || '1200 × 750 recommended'; updateBenefitPreview(); }
+  try { pendingCreateImage = await readImageFile(event.target.files[0],'benefit-images','covers'); $('#createImageError').textContent = ''; $('#createImageName').textContent = event.target.files[0]?.name || '1200 × 750 recommended'; updateBenefitPreview(); }
   catch (error) { pendingCreateImage = null; event.target.value = ''; $('#createImageError').textContent = error.message; }
 });
 $('#editBenefitImage').addEventListener('change', async event => {
-  try { pendingEditImage = await readImageFile(event.target.files[0]); $('#editBenefitError').textContent = ''; }
+  try { pendingEditImage = await readImageFile(event.target.files[0],'benefit-images','covers'); $('#editBenefitError').textContent = ''; }
   catch (error) { pendingEditImage = null; event.target.value = ''; $('#editBenefitError').textContent = error.message; }
 });
 $('#createBenefitGallery').addEventListener('change', async event => { await addGalleryFiles('create', event.target.files); event.target.value = ''; });
@@ -2099,13 +2147,15 @@ $('#adminSecurityForm').addEventListener('submit', event => {
   const form = event.currentTarget;
   const current = localStorage.getItem('foundry-admin-password') || 'demo123';
   const next = form.elements.newPassword.value;
-  if (form.elements.currentPassword.value !== current) { $('#securityError').textContent = 'Current password is incorrect.'; return; }
+  if (!backendEnabled() && form.elements.currentPassword.value !== current) { $('#securityError').textContent = 'Current password is incorrect.'; return; }
   if (next !== form.elements.confirmPassword.value) { $('#securityError').textContent = 'New passwords do not match.'; return; }
   if (!/[A-Za-z]/.test(next) || !/\d/.test(next)) { $('#securityError').textContent = 'Use at least one letter and one number.'; return; }
   localStorage.setItem('foundry-admin-password', next);
   const settings = JSON.parse(localStorage.getItem('foundry-admin-settings') || '{}');
   settings.security = { twoFactor:form.elements.twoFactor.checked, sessionTimeout:form.elements.sessionTimeout.value };
   localStorage.setItem('foundry-admin-settings', JSON.stringify(settings));
+  syncBackend('profile',{...currentUser,newPassword:next});
+  syncBackend('settings',settings);
   form.elements.currentPassword.value = ''; form.elements.newPassword.value = ''; form.elements.confirmPassword.value = '';
   $('#securityError').textContent = '';
   showToast('Password and security updated');
@@ -2125,10 +2175,13 @@ $$('.admin-modal').forEach(modal => modal.addEventListener('click', event => { i
 
 setupTelegram();
 renderDemoAccounts();
+window.addEventListener('focus',refreshRemoteData);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshRemoteData()});setInterval(refreshRemoteData,60000);
 const previousSession = sessionStorage.getItem('foundry-session');
 const sessionPartner = loadPartners().find(account => account.email === previousSession);
 const sessionMember = getMemberByEmail(previousSession || '');
 const previousAccount = demoAccounts.find(account => account.role === 'admin' && account.email === previousSession) || (sessionPartner ? {...sessionPartner,role:'partner',name:sessionPartner.company} : null) || (sessionMember ? {...demoAccounts.find(account => account.id === sessionMember.id),...sessionMember,role:sessionMember.role} : null);
 const sharedRegistrationEvent = new URLSearchParams(location.search).get('register');
-if (sharedRegistrationEvent) openGuestRegistration(sharedRegistrationEvent);
+if (backend?.recoverySession) showAuthView('reset-password');
+else if (sharedRegistrationEvent) openGuestRegistration(sharedRegistrationEvent);
+else if (backendEnabled() && backend.hasSession()) backend.restore().then(account=>{if(account){offers=loadOffers();signIn(account)}});
 else if (previousAccount) signIn(previousAccount);
