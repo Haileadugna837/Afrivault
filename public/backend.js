@@ -46,7 +46,6 @@
   async function verifyQr(qrToken,benefitId){return api('/api/qr/verify',{method:'POST',body:JSON.stringify({token:qrToken,benefitId})})}
   async function sendEmail(to,template,payload){return api('/api/email/send',{method:'POST',body:JSON.stringify({to,template,payload})})}
   async function registerApplication(application,password){return api('/api/sync',{method:'POST',body:JSON.stringify({domain:'application',payload:{...application,password}})})}
-  async function resendApproval(email){return api('/api/onboarding/resend-email',{method:'POST',body:JSON.stringify({email})})}
   async function updateOnboardingContact(payload){return api('/api/onboarding/contact',{method:'POST',body:JSON.stringify(payload)})}
   async function sendPhoneOtp(payload){return api('/api/onboarding/otp-send',{method:'POST',body:JSON.stringify(payload)})}
   async function verifyPhoneOtp(payload){return api('/api/onboarding/otp-check',{method:'POST',body:JSON.stringify(payload)})}
@@ -55,5 +54,5 @@
   async function signOut(){if(session?.access_token)auth('/logout',{method:'POST',headers:{authorization:`Bearer ${session.access_token}`}}).catch(()=>{});saveSession(null)}
   async function requestPasswordReset(email){return auth('/recover',{method:'POST',body:JSON.stringify({email,redirect_to:location.origin+location.pathname})})}
   async function updatePassword(password){const access=await token();return auth('/user',{method:'PUT',headers:{authorization:`Bearer ${access}`},body:JSON.stringify({password})})}
-  window.FoundryBackend={configured,signIn,signOut,restore,bootstrap,sync,registerApplication,resendApproval,updateOnboardingContact,sendPhoneOtp,verifyPhoneOtp,uploadImage,issueQr,verifyQr,sendEmail,weather,publicEvent,requestPasswordReset,updatePassword,recoverySession:Boolean(recoverySession),authCallbackSession:Boolean(authCallbackSession),hasSession:()=>Boolean(readSession()),get hydrating(){return hydrating}};
+  window.FoundryBackend={configured,signIn,signOut,restore,bootstrap,sync,registerApplication,updateOnboardingContact,sendPhoneOtp,verifyPhoneOtp,uploadImage,issueQr,verifyQr,sendEmail,weather,publicEvent,requestPasswordReset,updatePassword,recoverySession:Boolean(recoverySession),authCallbackSession:Boolean(authCallbackSession),hasSession:()=>Boolean(readSession()),get hydrating(){return hydrating}};
 })();

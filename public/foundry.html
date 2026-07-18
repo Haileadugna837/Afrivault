@@ -132,17 +132,16 @@
         </div>
 
         <div class="auth-view submitted-view" data-auth-view="submitted">
-          <div class="submitted-mark">✓</div><p class="eyebrow">APPLICATION RECEIVED</p><h2>You’re on the list.</h2><p class="auth-lead">Our community team will review your details. When approved, we’ll email you a secure verification link.</p>
+          <div class="submitted-mark">✓</div><p class="eyebrow">APPLICATION RECEIVED</p><h2>You’re on the list.</h2><p class="auth-lead">Our community team will review your details. Once approved, sign in with the email and password you chose, then complete Telegram verification.</p>
           <div class="submitted-reference"><span>APPLICATION REFERENCE</span><strong id="applicationReference">FDRY-AP-0000</strong></div>
           <button class="secondary-button" data-auth-go="welcome">Return to start</button>
         </div>
 
         <div class="auth-view onboarding-view" data-auth-view="email-pending">
           <button class="auth-back" data-auth-go="login">← Back to login</button>
-          <div class="onboarding-mark">✉</div><p class="eyebrow">APPROVAL & EMAIL</p><h2>Check your inbox.</h2>
-          <p class="auth-lead">If your application is approved, use the secure link in the approval email to confirm your address.</p>
-          <form id="resendApprovalForm" class="auth-form"><label>Email address<input id="pendingApprovalEmail" name="email" type="email" autocomplete="email" required /></label><p class="form-error" id="resendApprovalError"></p><button class="primary-button" type="submit">Resend verification email <span>↗</span></button></form>
-          <p class="field-note">For privacy, this screen gives the same response whether an application is still pending or already approved.</p>
+          <div class="onboarding-mark">⌛</div><p class="eyebrow">APPLICATION REVIEW</p><h2>Your application is still under review.</h2>
+          <p class="auth-lead">The community team must approve your membership before you can sign in. Once approved, use your email and password, then verify your phone through Telegram.</p>
+          <p class="field-note">For privacy, this screen does not reveal whether a particular application exists.</p>
         </div>
 
         <div class="auth-view onboarding-view" data-auth-view="verify-phone">

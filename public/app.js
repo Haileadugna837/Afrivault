@@ -346,7 +346,7 @@ async function performLogin(email,password) {
   } catch(error) {
     const message=error.message||'Sign-in failed. Check your details and try again.';
     if(backendEnabled()&&/email.*(confirm|verif)|not confirmed/i.test(message)){
-      $('#pendingApprovalEmail').value=email.trim().toLowerCase();showAuthView('email-pending');return;
+      showAuthView('email-pending');return;
     }
     $('#loginError').textContent=message;
   }
@@ -509,8 +509,7 @@ async function saveMemberSettings(event) {
   sessionStorage.setItem('foundry-session', email);
   closeAdminModal('memberSettingsModal');
   if(backendEnabled()&&(email!==previousEmail||members[index].phone!==previousPhone)){
-    if(email!==previousEmail){await backend.signOut();currentUser=null;$('#authShell').classList.remove('hidden');$('#memberApp').classList.add('hidden');$('#pendingApprovalEmail').value=email;showAuthView('email-pending');showToast('Verify your new email address');return;}
-    openPhoneVerification({...currentUser,onboardingStatus:'phone_pending'});showToast('Verify your new phone number');return;
+    openPhoneVerification({...currentUser,onboardingStatus:'phone_pending'});showToast('Verify your updated contact details through Telegram');return;
   }
   renderMemberExperience();
   renderDemoAccounts();
@@ -1131,7 +1130,7 @@ async function saveVerificationContact(){
   try{
     const result=await backend.updateOnboardingContact(phoneVerificationPayload());
     currentUser={...currentUser,...result,preferredOtpChannel:result.channel};
-    if(result.emailChanged){await backend.signOut();currentUser=null;$('#pendingApprovalEmail').value=result.email;showAuthView('email-pending');showToast('Verify the new email address');return result;}
+    if(result.emailChanged)showToast('Email updated. Continue with Telegram verification.');
     showToast('Contact details saved');return result;
   }catch(error){$('#phoneVerificationError').textContent=error.message||'Contact details could not be saved.';return null;}
 }
@@ -2118,7 +2117,6 @@ $('#togglePassword').addEventListener('click', event => {
 });
 $('#forgotPassword').addEventListener('click',async()=>{const email=$('#loginEmail').value.trim().toLowerCase();if(!email)return $('#loginError').textContent='Enter your email address first.';if(!backendEnabled())return showToast('Password reset requires the connected backend');try{await backend.requestPasswordReset(email);showToast('Password reset email sent')}catch(error){$('#loginError').textContent=error.message}});
 $('#resetPasswordForm').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,password=form.elements.password.value;if(password!==form.elements.confirmPassword.value)return $('#resetPasswordError').textContent='Passwords do not match.';if(!/[A-Za-z]/.test(password)||!/[0-9]/.test(password))return $('#resetPasswordError').textContent='Include at least one letter and one number.';try{await backend.updatePassword(password);$('#resetPasswordError').textContent='';showToast('Password updated');showAuthView('login')}catch(error){$('#resetPasswordError').textContent=error.message}});
-$('#resendApprovalForm').addEventListener('submit',async event=>{event.preventDefault();const email=$('#pendingApprovalEmail').value.trim().toLowerCase();$('#resendApprovalError').textContent='';try{if(!backendEnabled())throw new Error('The secure backend is not connected.');const result=await backend.resendApproval(email);showToast(result.message||'Check your inbox')}catch(error){$('#resendApprovalError').textContent=error.message||'The email could not be sent.';}});
 $('#saveVerificationContact').addEventListener('click',saveVerificationContact);
 $('#sendPhoneCode').addEventListener('click',sendPhoneVerificationCode);
 $('#phoneVerificationForm').addEventListener('submit',event=>{event.preventDefault();finishPhoneVerification();});
