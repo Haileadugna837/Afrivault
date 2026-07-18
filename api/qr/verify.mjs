@@ -5,7 +5,7 @@ export default async function handler(req,res){
     const actor=await requireIdentity(req,['partner','admin']);const input=await body(req);const secret=process.env.QR_SIGNING_SECRET;
     const verified=await jwtVerify(input.token,new TextEncoder().encode(secret),{issuer:'foundry-membership',audience:'foundry-partner'});
     const memberId=verified.payload.memberId;const [member]=await select('profiles',`id=eq.${encodeURIComponent(memberId)}&select=*`);
-    if(!member||member.status!=='active'||member.verification!=='verified')throw Object.assign(new Error('Membership unavailable'),{status:403,publicMessage:'Member is not currently active and verified'});
+    if(!member||member.status!=='active'||member.verification!=='verified'||member.onboarding_status!=='complete')throw Object.assign(new Error('Membership unavailable'),{status:403,publicMessage:'Member is not currently active and fully verified'});
     const partnerId=actor.role==='partner'?actor.partner.id:input.partnerId;let benefitId=input.benefitId||null;let eligibleBenefits=[];
     if(partnerId){const assignments=await select('partner_benefits',`partner_id=eq.${encodeURIComponent(partnerId)}&select=benefit_id`);const ids=assignments.map(row=>row.benefit_id);if(ids.length){const rows=await select('benefits',`id=in.(${ids.map(id=>`"${id.replaceAll('"','')}"`).join(',')})&status=eq.active&select=id,title,eligibility`);eligibleBenefits=rows.filter(item=>(item.eligibility||[]).includes(member.role)&&!(member.excluded_benefit_ids||[]).includes(item.id));}}
     if(!eligibleBenefits.length)throw Object.assign(new Error('No eligible assigned benefit'),{status:403,publicMessage:'Membership is valid, but no assigned benefit is available for this member'});

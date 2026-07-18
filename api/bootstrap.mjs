@@ -1,10 +1,17 @@
-import {method,safeError,send} from './_lib/http.mjs';import {requireIdentity} from './_lib/auth.mjs';import {select} from './_lib/supabase.mjs';
+import {method,safeError,send} from './_lib/http.mjs';import {requireIdentity} from './_lib/auth.mjs';import {select,update} from './_lib/supabase.mjs';
 const quoted=value=>`"${String(value).replaceAll('"','')}"`;
 const idFilter=ids=>ids.length?`id=in.(${ids.map(quoted).join(',')})`:'id=eq.__none__';
 export default async function handler(req,res){
   if(!method(req,res,['GET']))return;
   try{
     const actor=await requireIdentity(req);
+    if(['founder','employee','student','unemployed'].includes(actor.role)&&actor.user.email_confirmed_at&&actor.profile.onboarding_status==='email_pending'){
+      await update('profiles',`user_id=eq.${actor.user.id}`,{onboarding_status:'phone_pending'});
+      actor.profile.onboarding_status='phone_pending';
+    }
+    if(['founder','employee','student','unemployed'].includes(actor.role)&&actor.profile.onboarding_status!=='complete'){
+      send(res,200,{actor,categories:[],benefits:[],events:[],eventPeople:[],members:[actor.profile],rsvps:[],saved:[]});return;
+    }
     const categories=await select('benefit_categories','select=*&order=sort_order');
     let benefits=[];let events=[];let eventPeople=[];
     if(actor.role==='admin'){

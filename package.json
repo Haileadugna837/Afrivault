@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite public",
     "build": "node build.mjs",
-    "seed:auth": "node scripts/seed-auth.mjs",
+    "setup:admin": "node scripts/setup-admin.mjs",
     "check": "node --check public/app.js && node --check public/backend.js"
   },
   "dependencies": {

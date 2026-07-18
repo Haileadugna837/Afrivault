@@ -19,27 +19,6 @@ insert into public.benefits (id,brand,title,category_id,label,member_value,color
 ('jobfair','TALENT\nROOM','Priority career room access','career','OPPORTUNITY','Priority entry','#f0bc68','#3c280a','Join curated employer rooms, CV clinics and interview-practice sessions before public release.',array['employee','student','unemployed'],true,'active')
 on conflict (id) do update set brand=excluded.brand,title=excluded.title,category_id=excluded.category_id,label=excluded.label,member_value=excluded.member_value,color=excluded.color,text_color=excluded.text_color,description=excluded.description,eligibility=excluded.eligibility,featured=excluded.featured,status=excluded.status;
 
-insert into public.profiles (id,email,name,phone,city,organization,title,role,status,verification,expires,notes,excluded_benefit_ids) values
-('ADMIN','admin@foundry.demo','Community Admin','','Addis Ababa','Foundry','Community Operations Lead','admin','active','verified',null,'Prototype administrator','{}'),
-('FDRY-F-260071','founder@foundry.demo','Haile Adugna','+251 911 242 801','Addis Ababa','Modern Ethiopia','Founder & CEO','founder','active','verified','2027-07-17','Founding community member.','{}'),
-('FDRY-E-260184','employee@foundry.demo','Sara Bekele','+251 922 110 441','Addis Ababa','Meraki Group','Marketing Manager','employee','active','verified','2027-07-17','','{}'),
-('FDRY-S-260239','student@foundry.demo','Nahom Tesfaye','+251 933 208 915','Addis Ababa','Addis Ababa University','Business Student','student','active','verified','2027-07-17','','{}'),
-('FDRY-O-260306','opportunity@foundry.demo','Liya Girma','+251 944 601 118','Addis Ababa','Independent','Product Designer','unemployed','active','verified','2027-07-17','Open to product and UX roles.','{}'),
-('FDRY-F-260412','marta@tena.demo','Marta Alemu','+251 911 553 902','Addis Ababa','Tena Foods','Co-founder','founder','active','verified','2027-06-02','Food manufacturing founder.','{}'),
-('FDRY-E-260488','henok@rd.demo','Henok Desta','+251 922 893 311','Bishoftu','R&D Group','Account Manager','employee','active','verified','2027-05-19','','{wellness}'),
-('FDRY-S-260522','betelhem@aau.demo','Betelhem Tadesse','+251 933 201 767','Addis Ababa','Addis Ababa University','Economics Student','student','active','verified','2027-04-12','','{}'),
-('FDRY-O-260577','yared@career.demo','Yared Kebede','+251 944 019 334','Addis Ababa','Independent','Data Analyst','unemployed','active','pending','2027-03-28','Verification follow-up required.','{}'),
-('FDRY-F-260601','ruth@orbit.demo','Ruth Mamo','+251 911 608 451','Hawassa','Orbit Commerce','Managing Director','founder','active','verified','2027-02-15','','{qatar}'),
-('FDRY-E-260634','kaleb@nova.demo','Kaleb Getachew','+251 922 774 610','Addis Ababa','Nova Systems','Software Engineer','employee','suspended','verified','2026-12-30','Account suspended pending review.','{}'),
-('FDRY-S-260688','saron@astu.demo','Saron Fikru','+251 933 407 265','Adama','ASTU','Engineering Student','student','active','verified','2027-01-20','','{}'),
-('FDRY-E-260720','dawit@vertex.demo','Dawit Kassahun','+251 944 782 411','Addis Ababa','Vertex Advisory','Financial Analyst','employee','expired','verified','2026-06-30','Renewal reminder sent.','{}')
-on conflict (id) do update set email=excluded.email,name=excluded.name,phone=excluded.phone,city=excluded.city,organization=excluded.organization,title=excluded.title,role=excluded.role,status=excluded.status,verification=excluded.verification,expires=excluded.expires,notes=excluded.notes,excluded_benefit_ids=excluded.excluded_benefit_ids;
-
-insert into public.partners (id,email,company,contact_name,status) values
-('PARTNER-SELAM','partner@foundry.demo','Selam Coffee','Mekdes Alemu','active')
-on conflict (id) do update set email=excluded.email,company=excluded.company,contact_name=excluded.contact_name,status=excluded.status;
-insert into public.partner_benefits (partner_id,benefit_id) values ('PARTNER-SELAM','selam') on conflict do nothing;
-
 insert into public.events (id,title,organizer,event_type,summary,description,status,featured,start_at,end_at,rsvp_deadline,capacity,guest_policy,format,venue,address,latitude,longitude,map_label,cost_type,agenda,requirements,dress_code,age_restriction,accessibility,contact_email,contact_phone,eligibility,color,open_registration) values
 ('EVENT-FOUNDERS','Founder Leadership Roundtable','Foundry Community','networking','A small, candid room for founders navigating growth, hiring and capital decisions.','A moderated peer roundtable designed for practical exchange between company builders.','published',true,now()+interval '12 days',now()+interval '12 days 2 hours',now()+interval '10 days',28,'members-only','in-person','The Urban Center','Meskel Square, Addis Ababa',9.0108,38.7613,'The Urban Center','free','18:00 Arrival and introductions; 18:20 Moderated founder roundtable; 19:30 Peer connections and refreshments','Bring one current leadership challenge. A live Foundry membership card is required.','Smart casual','18+','Step-free access is available.','events@foundry.community','+251 911 000 101',array['founder'],'#151613',false),
 ('EVENT-COFFEE','Foundry Community Coffee','Foundry Community','social','Meet members from every part of the community over an easy Saturday coffee.','A relaxed gathering for introductions, conversation and community updates.','published',true,now()+interval '18 days',now()+interval '18 days 2 hours',now()+interval '17 days',80,'one-guest','in-person','Selam Coffee · Bole','Bole Road, Addis Ababa',8.9986,38.7904,'Selam Coffee · Bole','free','Open arrival, community welcome and member introductions.','Show your active Foundry membership QR at check-in.','Come as you are','None','Ground-floor venue with accessible entrance.','events@foundry.community','+251 911 000 101',array['founder','employee','student','unemployed'],'#d99b6c',true),
@@ -54,12 +33,4 @@ insert into public.event_people (id,event_id,type,name,title,description,website
 ('PERSON-MERON','EVENT-CAREER','speaker','Meron Tadesse','People & Culture Lead','Meron helps growing teams build fair hiring systems.','',1)
 on conflict (id) do update set event_id=excluded.event_id,type=excluded.type,name=excluded.name,title=excluded.title,description=excluded.description,website=excluded.website,sort_order=excluded.sort_order;
 
-insert into public.applications (id,email,name,role,status,data,submitted_at) values
-('AP-1842','marta@tena.demo','Marta Alemu','founder','pending','{"detail":"Co-founder · Tena Foods"}',now()),
-('AP-1841','henok@rd.demo','Henok Desta','employee','pending','{"detail":"Account Manager · R&D Group"}',now()),
-('AP-1840','betelhem@aau.demo','Betelhem Tadesse','student','pending','{"detail":"Economics · AAU"}',now()-interval '1 day'),
-('AP-1839','yared@career.demo','Yared Kebede','unemployed','pending','{"detail":"Data Analyst · Open to work"}',now()-interval '1 day')
-on conflict (id) do nothing;
-
 insert into public.admin_settings (id,settings) values ('community','{"community":{"communityName":"Foundry","timezone":"Africa/Addis_Ababa","membershipDuration":"12","reviewSla":"48","manualApproval":true,"hideDrafts":true}}') on conflict (id) do nothing;
-

@@ -1,62 +1,95 @@
-# Foundry backend setup
+# Foundry production backend setup
 
-The application now supports a Supabase PostgreSQL backend, Supabase Auth and Storage, Vercel server functions, secure signed QR verification, Resend email delivery, server-side weather lookup and browser fallback mode.
+Foundry uses Supabase PostgreSQL, Auth and Storage; Vercel Node.js functions; Twilio SendGrid email; Twilio Verify for WhatsApp OTP; Telegram Gateway for Telegram OTP; signed member QR codes; and server-side event weather.
 
-## 1. Create the database
+## 1. Apply the database files
 
-In the Supabase SQL Editor, run these files in order:
+In Supabase SQL Editor, run these in order:
 
 1. `supabase/migrations/202607180001_foundry_backend.sql`
-2. `supabase/seed.sql`
+2. `supabase/migrations/202607180002_verified_onboarding.sql`
+3. `supabase/cleanup-demo-identities.sql`
+4. `supabase/seed.sql`
 
-The migration creates tables, indexes, row-level security policies and three public image buckets. The seed adds the current prototype benefits, member records, partner, events and applications.
+The cleanup file deletes only the known prototype profiles, applications, partner and Auth users. It preserves benefits, categories, events and settings. The current seed contains content only and no longer creates demo identities.
 
-## 2. Collect keys
+Keep Row Level Security enabled. The verification challenge table intentionally has no browser policy; only server functions using the service role can access it.
 
-From Supabase Project Settings → API, collect:
+## 2. Configure Supabase and Vercel
 
-- Project URL
-- Publishable/anon key
-- Service-role key
-
-The anon key is designed for browser use. The service-role key must only be placed in Vercel environment variables.
-
-## 3. Configure Vercel
-
-Connect `Haileadugna837/Afrivault` to a Vercel project and add:
+Add these Environment Variables to the Vercel project for Production, Preview and Development as appropriate:
 
 ```text
-NEXT_PUBLIC_SUPABASE_URL=https://ixmlmkryvojamioifjce.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_publishable_key
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_publishable_or_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_server_only_service_role_key
 QR_SIGNING_SECRET=a_random_secret_of_at_least_32_characters
 APP_URL=https://your-production-domain.example
-RESEND_API_KEY=optional_until_email_is_enabled
+
+TWILIO_SENDGRID_API_KEY=your_sendgrid_api_key
 EMAIL_FROM=Foundry <members@your-verified-domain.example>
+
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+TWILIO_VERIFY_SERVICE_SID=VA...
+
+TELEGRAM_GATEWAY_TOKEN=your_telegram_gateway_token
 ```
 
-Generate `QR_SIGNING_SECRET` with a password manager or `openssl rand -base64 48`.
+Never put the service-role key, Twilio token, SendGrid key, Telegram token, QR secret or account passwords in a public file or a `NEXT_PUBLIC_` variable.
 
-## 4. Create login accounts
+In Supabase Authentication → URL Configuration, set the Site URL to `APP_URL` and add the production/preview domains to Redirect URLs. Approval and email-change links depend on this.
 
-After loading the seed, run locally with the same server variables:
+## 3. Create the primary administrator
+
+Change the password previously shared in chat. Then run this from a trusted local terminal; do not paste the password into source files:
 
 ```bash
-npm install
-FIRST_ADMIN_EMAIL=you@example.com npm run seed:auth
+export NEXT_PUBLIC_SUPABASE_URL='https://your-project.supabase.co'
+export SUPABASE_SERVICE_ROLE_KEY='your-server-only-key'
+export ADMIN_EMAIL='your-admin-email@example.com'
+export ADMIN_PASSWORD='a-new-unique-password'
+export ADMIN_NAME='Community Admin'
+npm run setup:admin
 ```
 
-This links the first admin and prototype accounts to Supabase Auth. Change every demo password before a public launch.
+Remove `ADMIN_PASSWORD` from the terminal environment after the command completes. The script creates or updates the confirmed primary Supabase Auth user and links the `ADMIN-PRIMARY` profile.
 
-In Supabase Authentication → URL Configuration, set **Site URL** to the production domain and add the same domain to **Redirect URLs**. This is required for password recovery links.
+## 4. Configure email and OTP providers
 
-## 5. Configure email
+Twilio SendGrid:
 
-Verify your sending domain in Resend, then add `RESEND_API_KEY` and `EMAIL_FROM` in Vercel. Without the key, email requests remain in `email_outbox` with status `queued` and the rest of the application continues working.
+- Authenticate the production domain or verify a testing sender.
+- Create an API key with mail-send access.
+- Make `EMAIL_FROM` match the verified sender/domain.
+
+Twilio Verify WhatsApp:
+
+- Create a Verify Service and copy its `VA...` SID.
+- Complete Twilio/Meta onboarding for your own WhatsApp sender.
+- Enable WhatsApp as a verification channel.
+
+Telegram:
+
+- Create a Telegram Gateway account and obtain its access token.
+- Fund the Gateway account for real deliveries.
+- Recipients must have the submitted phone number registered on Telegram.
+
+## 5. Onboarding behavior
+
+1. An applicant selects a membership type and supplies their own password, email, phone and preferred OTP channel.
+2. The password goes directly to Supabase Auth. It is never written to `applications`, local storage or logs.
+3. The account remains email-unconfirmed and has no member profile until an administrator approves it.
+4. Approval creates the member profile and sends a SendGrid approval/verification link.
+5. Clicking the link verifies the email and opens the phone-verification screen.
+6. WhatsApp codes use Twilio Verify; Telegram codes use Telegram Gateway.
+7. Only a member with an active profile, verified email and verified phone can load benefits/events or generate a QR pass.
+8. Changing email or phone resets the corresponding verification gate.
 
 ## Security notes
 
-- Never commit `.env`, the service-role key, Resend key or QR signing secret.
-- Keep Supabase Row Level Security enabled.
-- Use the partner portal for QR verification; QR tokens expire after two minutes.
-- The app retains local prototype fallback only when no Supabase public key is configured.
+- Rotate any credential ever pasted into a chat or screenshot.
+- Keep RLS enabled and keep the service-role key server-only.
+- QR tokens expire after two minutes.
+- OTP requests and approval-email resends are rate-limited.
+- Review the `email_outbox` table for queued or failed messages.

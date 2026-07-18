@@ -116,6 +116,7 @@ let saved = new Set();
 let toastTimer;
 let qrInterval;
 let applicationStep = 1;
+let verificationChallengeId = '';
 let pendingCreateImage = null;
 let pendingEditImage = null;
 let pendingCreateGallery = [];
@@ -229,7 +230,8 @@ function loadPartners() {
 }
 
 function savePartners(partners) {
-  localStorage.setItem('foundry-partners', JSON.stringify(partners));
+  const local=backendEnabled()?partners.map(({password,...partner})=>partner):partners;
+  localStorage.setItem('foundry-partners', JSON.stringify(local));
   if (currentUser?.role === 'admin') syncBackend('partners', partners);
 }
 
@@ -262,7 +264,8 @@ function loadMembers() {
 }
 
 function saveMembers(members) {
-  localStorage.setItem('foundry-members', JSON.stringify(members));
+  const local=backendEnabled()?members.map(({password,...member})=>member):members;
+  localStorage.setItem('foundry-members', JSON.stringify(local));
   if (currentUser?.role === 'admin') syncBackend('members', members);
 }
 
@@ -340,7 +343,25 @@ async function performLogin(email,password) {
     const account=backendEnabled()?await backend.signIn(email.trim().toLowerCase(),password):authenticate(email,password);
     if(!account)throw new Error('The email or password is incorrect.');
     offers=loadOffers();signIn(account);
-  } catch(error) { $('#loginError').textContent=error.message||'Sign-in failed. Check your details and try again.'; }
+  } catch(error) {
+    const message=error.message||'Sign-in failed. Check your details and try again.';
+    if(backendEnabled()&&/email.*(confirm|verif)|not confirmed/i.test(message)){
+      $('#pendingApprovalEmail').value=email.trim().toLowerCase();showAuthView('email-pending');return;
+    }
+    $('#loginError').textContent=message;
+  }
+}
+
+function openPhoneVerification(account){
+  currentUser={...account};verificationChallengeId='';
+  sessionStorage.setItem('foundry-session',account.email);
+  $('#memberApp').classList.add('hidden');$('#adminApp').classList.add('hidden');$('#partnerApp').classList.add('hidden');
+  $('#authShell').classList.remove('hidden');
+  $('#verificationEmail').value=account.email||'';$('#verificationPhone').value=account.phone||'';
+  const preferred=account.preferredOtpChannel||account.phoneVerificationChannel||'whatsapp';
+  const choice=$(`#phoneVerificationForm input[name="channel"][value="${preferred}"]`);if(choice)choice.checked=true;
+  $('#otpEntry').classList.add('hidden');$('#phoneOtpCode').value='';$('#phoneVerificationError').textContent='';
+  showAuthView('verify-phone');
 }
 
 async function refreshRemoteData(){
@@ -349,6 +370,9 @@ async function refreshRemoteData(){
 }
 
 function signIn(account) {
+  if(!['admin','partner'].includes(account.role)&&account.onboardingStatus&&account.onboardingStatus!=='complete'){
+    openPhoneVerification(account);return;
+  }
   const member = ['admin','partner'].includes(account.role) ? null : getMemberByEmail(account.email);
   if (member?.status && member.status !== 'active') {
     showAuthView('login');
@@ -455,7 +479,7 @@ function openMemberSettings() {
   openAdminModal('memberSettingsModal');
 }
 
-function saveMemberSettings(event) {
+async function saveMemberSettings(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = new FormData(form);
@@ -474,14 +498,20 @@ function saveMemberSettings(event) {
     if (newPassword !== data.get('confirmPassword')) { $('#memberSecurityError').textContent = 'New passwords do not match.'; return; }
     if (!/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) { $('#memberSecurityError').textContent = 'Use at least one letter and one number.'; return; }
   }
+  const previousEmail=members[index].email;const previousPhone=members[index].phone;
   members[index] = {
-    ...members[index], name:data.get('name').trim(), email, phone:data.get('phone').trim(), city:data.get('city').trim(), organization:data.get('organization').trim(), title:data.get('title').trim(), language:data.get('language'), twoFactor:data.get('twoFactor') === 'on', emailAlerts:data.get('emailAlerts') === 'on', telegramAlerts:data.get('telegramAlerts') === 'on', usageReceipts:data.get('usageReceipts') === 'on', ...(newPassword ? {password:newPassword} : {})
+    ...members[index], name:data.get('name').trim(), email, phone:data.get('phone').trim(), city:data.get('city').trim(), organization:data.get('organization').trim(), title:data.get('title').trim(), language:data.get('language'), twoFactor:data.get('twoFactor') === 'on', emailAlerts:data.get('emailAlerts') === 'on', telegramAlerts:data.get('telegramAlerts') === 'on', usageReceipts:data.get('usageReceipts') === 'on', ...(!backendEnabled()&&newPassword ? {password:newPassword} : {})
   };
+  try{if(backendEnabled())await backend.sync('profile',{...members[index],...(newPassword?{newPassword}:{})});}
+  catch(error){$('#memberSecurityError').textContent=error.message||'Settings could not be saved.';return;}
   saveMembers(members);
-  syncBackend('profile', {...members[index],...(newPassword ? {newPassword} : {})});
   currentUser = {...currentUser,...members[index],subtitle:`${members[index].title} · ${members[index].organization}`};
   sessionStorage.setItem('foundry-session', email);
   closeAdminModal('memberSettingsModal');
+  if(backendEnabled()&&(email!==previousEmail||members[index].phone!==previousPhone)){
+    if(email!==previousEmail){await backend.signOut();currentUser=null;$('#authShell').classList.remove('hidden');$('#memberApp').classList.add('hidden');$('#pendingApprovalEmail').value=email;showAuthView('email-pending');showToast('Verify your new email address');return;}
+    openPhoneVerification({...currentUser,onboardingStatus:'phone_pending'});showToast('Verify your new phone number');return;
+  }
   renderMemberExperience();
   renderDemoAccounts();
   showToast('Member settings saved');
@@ -1025,6 +1055,7 @@ function closeQr() {
 function resetApplication() {
   applicationStep = 1;
   $('#applicationForm').reset();
+  $('#applicationError').textContent='';
   showApplicationStep();
 }
 
@@ -1064,6 +1095,7 @@ function validateApplicationStep() {
     if (!field.checkValidity()) { field.reportValidity(); return false; }
   }
   if (applicationStep === 1 && !selectedApplicationRole()) return false;
+  if(applicationStep===2){const form=$('#applicationForm');if(form.elements.password.value!==form.elements.confirmPassword.value){form.elements.confirmPassword.setCustomValidity('Passwords do not match');form.elements.confirmPassword.reportValidity();return false}form.elements.confirmPassword.setCustomValidity('');if(!/[A-Za-z]/.test(form.elements.password.value)||!/[0-9]/.test(form.elements.password.value)){form.elements.password.setCustomValidity('Include at least one letter and one number');form.elements.password.reportValidity();return false}form.elements.password.setCustomValidity('');}
   return true;
 }
 
@@ -1073,18 +1105,55 @@ function renderApplicationReview() {
   $('#applicationReview').innerHTML = `<div class="review-header"><span class="review-role-dot" style="--review-color:${type.demoColor};--review-text:${type.demoText}">${type.letter}</span><div><b>${escapeHtml(data.firstName)} ${escapeHtml(data.lastName)}</b><small>${escapeHtml(type.label)} application · ${escapeHtml(type.tier)} card</small></div></div><div class="review-grid"><div><span>EMAIL</span><b>${escapeHtml(data.email)}</b></div><div><span>PHONE</span><b>${escapeHtml(data.phone)}</b></div><div><span>ORGANIZATION</span><b>${escapeHtml(data.company || 'Not provided')}</b></div><div><span>ROLE / PROGRAM</span><b>${escapeHtml(data.title)}</b></div><div><span>EXPERTISE</span><b>${escapeHtml(data.expertise)}</b></div><div><span>CITY</span><b>${escapeHtml(data.city)}</b></div></div>`;
 }
 
-function submitApplication() {
+async function submitApplication() {
   if (!validateApplicationStep()) return;
   const data = Object.fromEntries(new FormData($('#applicationForm')).entries());
   const reference = `FDRY-AP-${String(Math.floor(1000 + Math.random() * 9000))}`;
-  const stored = JSON.parse(localStorage.getItem('foundry-applications') || '[]');
-  const application={ id:reference.replace('FDRY-',''), email:data.email, name:`${data.firstName} ${data.lastName}`, initials:`${data.firstName[0]}${data.lastName[0]}`.toUpperCase(), role:data.memberRole, detail:`${data.title}${data.company ? ` · ${data.company}` : ''}`, submitted:'Just now', submittedAt:new Date().toISOString(), status:'pending', data };
-  stored.unshift(application);
-  localStorage.setItem('foundry-applications', JSON.stringify(stored));
-  syncBackend('application',application);
-  $('#applicationReference').textContent = reference;
-  showAuthView('submitted');
-  tgHaptic('heavy');
+  const safeData={...data};delete safeData.password;delete safeData.confirmPassword;
+  const application={id:reference.replace('FDRY-',''),email:data.email.trim().toLowerCase(),name:`${data.firstName} ${data.lastName}`.trim(),initials:`${data.firstName[0]}${data.lastName[0]}`.toUpperCase(),role:data.memberRole,detail:`${data.title}${data.company ? ` · ${data.company}` : ''}`,submitted:'Just now',submittedAt:new Date().toISOString(),status:'pending',data:safeData};
+  const button=$('#submitApplication');$('#applicationError').textContent='';button.disabled=true;button.textContent='Submitting…';
+  try{
+    if(!backendEnabled())throw new Error('Registration is temporarily unavailable because the secure backend is not connected.');
+    await backend.registerApplication(application,data.password);
+    $('#applicationReference').textContent=reference;showAuthView('submitted');tgHaptic('heavy');
+  }catch(error){$('#applicationError').textContent=error.message||'The application could not be submitted. Please try again.';}
+  finally{button.disabled=false;button.innerHTML='Submit application <span>↗</span>';}
+}
+
+function phoneVerificationPayload(){
+  const form=$('#phoneVerificationForm');
+  return {email:form.elements.email.value.trim().toLowerCase(),phone:form.elements.phone.value.trim(),channel:new FormData(form).get('channel')||'whatsapp'};
+}
+
+async function saveVerificationContact(){
+  const form=$('#phoneVerificationForm');if(!form.reportValidity())return null;
+  $('#phoneVerificationError').textContent='';
+  try{
+    const result=await backend.updateOnboardingContact(phoneVerificationPayload());
+    currentUser={...currentUser,...result,preferredOtpChannel:result.channel};
+    if(result.emailChanged){await backend.signOut();currentUser=null;$('#pendingApprovalEmail').value=result.email;showAuthView('email-pending');showToast('Verify the new email address');return result;}
+    showToast('Contact details saved');return result;
+  }catch(error){$('#phoneVerificationError').textContent=error.message||'Contact details could not be saved.';return null;}
+}
+
+async function sendPhoneVerificationCode(){
+  const savedContact=await saveVerificationContact();if(!savedContact||savedContact.emailChanged)return;
+  const button=$('#sendPhoneCode');button.disabled=true;button.textContent='Sending…';$('#phoneVerificationError').textContent='';
+  try{
+    const result=await backend.sendPhoneOtp(phoneVerificationPayload());verificationChallengeId=result.challengeId;
+    $('#otpEntry').classList.remove('hidden');$('#phoneOtpCode').focus();showToast(`Code sent through ${result.channel==='whatsapp'?'WhatsApp':'Telegram'}`);
+  }catch(error){$('#phoneVerificationError').textContent=error.message||'The verification code could not be sent.';}
+  finally{button.disabled=false;button.innerHTML='Send verification code <span>→</span>';}
+}
+
+async function finishPhoneVerification(){
+  if(!verificationChallengeId){$('#phoneVerificationError').textContent='Request a verification code first.';return;}
+  const code=$('#phoneOtpCode').value.trim();$('#phoneVerificationError').textContent='';
+  try{
+    await backend.verifyPhoneOtp({challengeId:verificationChallengeId,code});
+    const account=await backend.restore();if(!account)throw new Error('Verification succeeded. Please sign in again.');
+    offers=loadOffers();signIn(account);showToast('Membership verified');
+  }catch(error){$('#phoneVerificationError').textContent=error.message||'The code could not be verified.';}
 }
 
 function toDateTimeLocal(value) {
@@ -1525,7 +1594,7 @@ function deleteCurrentBenefit() {
 function allApplications() {
   const stored = JSON.parse(localStorage.getItem('foundry-applications') || '[]');
   const statuses = JSON.parse(localStorage.getItem('foundry-application-statuses') || '{}');
-  const merged=[...stored,...seedApplications].filter((app,index,list)=>list.findIndex(item=>item.id===app.id)===index);
+  const merged=[...stored,...(backendEnabled()?[]:seedApplications)].filter((app,index,list)=>list.findIndex(item=>item.id===app.id)===index);
   return merged.map(app => ({...app, status:statuses[app.id] || app.status}));
 }
 
@@ -1534,11 +1603,12 @@ function renderApplications() {
   $('#applicationTable').innerHTML = `<div class="table-header"><span>APPLICANT</span><span>TYPE</span><span>REFERENCE</span><span>SUBMITTED</span><span>ACTION</span></div>${apps.map(app => `<div class="application-row"><div class="applicant"><i>${escapeHtml(app.initials)}</i><span><b>${escapeHtml(app.name)}</b><small>${escapeHtml(app.detail)}</small></span></div><span class="category-tag">${escapeHtml(memberTypes[app.role]?.label || app.role)}</span><small>${escapeHtml(app.id)}</small><small>${escapeHtml(app.submitted)}</small><div class="application-actions-row">${app.status === 'pending' ? `<button data-application-action="declined" data-application-id="${escapeHtml(app.id)}">Decline</button><button class="approve" data-application-action="approved" data-application-id="${escapeHtml(app.id)}">Approve</button>` : `<span class="status-tag ${app.status === 'approved' ? 'active' : 'draft'}">${escapeHtml(app.status)}</span>`}</div></div>`).join('')}`;
 }
 
-function setApplicationStatus(id, status) {
+async function setApplicationStatus(id, status) {
+  try{if(backendEnabled())await backend.sync('application-status',{id,status});}
+  catch(error){showToast(error.message||'Application status could not be changed');return;}
   const statuses = JSON.parse(localStorage.getItem('foundry-application-statuses') || '{}');
   statuses[id] = status;
   localStorage.setItem('foundry-application-statuses', JSON.stringify(statuses));
-  syncBackend('application-status',{id,status});
   renderApplications();
   renderAdmin();
   adminNavigate('applications');
@@ -1842,7 +1912,7 @@ function savePartnerAccount(event) {
 
 function loadAdminSettings() {
   const settings = JSON.parse(localStorage.getItem('foundry-admin-settings') || '{}');
-  const profile = { adminName:'Community Admin', adminEmail:'admin@foundry.demo', adminTitle:'Community Operations Lead', adminPhone:'+251 911 000 000', ...(settings.profile || {}) };
+  const profile = { adminName:currentUser?.name||'Community Admin', adminEmail:currentUser?.email||'', adminTitle:'Community Operations Lead', adminPhone:currentUser?.phone||'', ...(settings.profile || {}) };
   const profileForm = $('#adminProfileForm');
   Object.entries(profile).forEach(([key,value]) => { if (profileForm.elements[key]) profileForm.elements[key].value = value; });
   const initials = profile.adminName.split(' ').map(part => part[0]).slice(0,2).join('').toUpperCase();
@@ -2048,6 +2118,11 @@ $('#togglePassword').addEventListener('click', event => {
 });
 $('#forgotPassword').addEventListener('click',async()=>{const email=$('#loginEmail').value.trim().toLowerCase();if(!email)return $('#loginError').textContent='Enter your email address first.';if(!backendEnabled())return showToast('Password reset requires the connected backend');try{await backend.requestPasswordReset(email);showToast('Password reset email sent')}catch(error){$('#loginError').textContent=error.message}});
 $('#resetPasswordForm').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,password=form.elements.password.value;if(password!==form.elements.confirmPassword.value)return $('#resetPasswordError').textContent='Passwords do not match.';if(!/[A-Za-z]/.test(password)||!/[0-9]/.test(password))return $('#resetPasswordError').textContent='Include at least one letter and one number.';try{await backend.updatePassword(password);$('#resetPasswordError').textContent='';showToast('Password updated');showAuthView('login')}catch(error){$('#resetPasswordError').textContent=error.message}});
+$('#resendApprovalForm').addEventListener('submit',async event=>{event.preventDefault();const email=$('#pendingApprovalEmail').value.trim().toLowerCase();$('#resendApprovalError').textContent='';try{if(!backendEnabled())throw new Error('The secure backend is not connected.');const result=await backend.resendApproval(email);showToast(result.message||'Check your inbox')}catch(error){$('#resendApprovalError').textContent=error.message||'The email could not be sent.';}});
+$('#saveVerificationContact').addEventListener('click',saveVerificationContact);
+$('#sendPhoneCode').addEventListener('click',sendPhoneVerificationCode);
+$('#phoneVerificationForm').addEventListener('submit',event=>{event.preventDefault();finishPhoneVerification();});
+$('#verificationSignOut').addEventListener('click',()=>signOut('login'));
 
 $('#copyDemoPassword').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText('demo123'); showToast('Demo password copied'); }
@@ -2057,7 +2132,7 @@ $('#copyDemoPassword').addEventListener('click', async () => {
 $('#applicationBack').addEventListener('click', () => applicationStep > 1 ? (applicationStep--, showApplicationStep()) : showAuthView('welcome'));
 $('#prevApplication').addEventListener('click', () => { applicationStep--; showApplicationStep(); });
 $('#nextApplication').addEventListener('click', () => { if (!validateApplicationStep()) return; applicationStep++; showApplicationStep(); });
-$('#applicationForm').addEventListener('submit', event => { event.preventDefault(); submitApplication(); });
+$('#applicationForm').addEventListener('submit', async event => { event.preventDefault(); await submitApplication(); });
 
 $('#filterRow').addEventListener('click', event => {
   const button = event.target.closest('[data-filter]');
@@ -2142,7 +2217,7 @@ $('#editBenefitGallery').addEventListener('change', async event => { await addGa
 $('#adminProfileForm').addEventListener('submit', event => { event.preventDefault(); saveSettingsSection('profile', formValues(event.currentTarget)); });
 $('#adminNotificationsForm').addEventListener('submit', event => { event.preventDefault(); saveSettingsSection('notifications', formValues(event.currentTarget)); });
 $('#communitySettingsForm').addEventListener('submit', event => { event.preventDefault(); saveSettingsSection('community', formValues(event.currentTarget)); });
-$('#adminSecurityForm').addEventListener('submit', event => {
+$('#adminSecurityForm').addEventListener('submit', async event => {
   event.preventDefault();
   const form = event.currentTarget;
   const current = localStorage.getItem('foundry-admin-password') || 'demo123';
@@ -2150,12 +2225,12 @@ $('#adminSecurityForm').addEventListener('submit', event => {
   if (!backendEnabled() && form.elements.currentPassword.value !== current) { $('#securityError').textContent = 'Current password is incorrect.'; return; }
   if (next !== form.elements.confirmPassword.value) { $('#securityError').textContent = 'New passwords do not match.'; return; }
   if (!/[A-Za-z]/.test(next) || !/\d/.test(next)) { $('#securityError').textContent = 'Use at least one letter and one number.'; return; }
-  localStorage.setItem('foundry-admin-password', next);
+  if(!backendEnabled())localStorage.setItem('foundry-admin-password', next);
   const settings = JSON.parse(localStorage.getItem('foundry-admin-settings') || '{}');
   settings.security = { twoFactor:form.elements.twoFactor.checked, sessionTimeout:form.elements.sessionTimeout.value };
   localStorage.setItem('foundry-admin-settings', JSON.stringify(settings));
-  syncBackend('profile',{...currentUser,newPassword:next});
-  syncBackend('settings',settings);
+  try{if(backendEnabled())await backend.updatePassword(next);await syncBackend('settings',settings);}
+  catch(error){$('#securityError').textContent=error.message||'Security settings could not be updated.';return;}
   form.elements.currentPassword.value = ''; form.elements.newPassword.value = ''; form.elements.confirmPassword.value = '';
   $('#securityError').textContent = '';
   showToast('Password and security updated');
@@ -2175,6 +2250,7 @@ $$('.admin-modal').forEach(modal => modal.addEventListener('click', event => { i
 
 setupTelegram();
 renderDemoAccounts();
+if(backendEnabled())$$('[data-auth-go="demo"]').forEach(button=>button.classList.add('hidden'));
 window.addEventListener('focus',refreshRemoteData);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshRemoteData()});setInterval(refreshRemoteData,60000);
 const previousSession = sessionStorage.getItem('foundry-session');
 const sessionPartner = loadPartners().find(account => account.email === previousSession);
