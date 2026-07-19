@@ -5,14 +5,18 @@ const snakeEvent=e=>({id:e.id,title:e.title,organizer:e.organizer,event_type:e.e
 async function ensureAccount(email,password,metadata={}){
   if(!password)return null;
   try{return await authAdmin('/users',{method:'POST',body:{email,password,email_confirm:true,user_metadata:metadata}})}catch(error){
-    if(!String(error.message).toLowerCase().includes('already'))throw error;return null;
+    if(!String(error.message).toLowerCase().match(/already|registered|exists/))throw error;
+    const listed=await authAdmin('/users?page=1&per_page=1000');
+    const existing=(listed.users||[]).find(user=>String(user.email||'').toLowerCase()===String(email).toLowerCase());
+    if(!existing)throw error;
+    return existing;
   }
 }
 async function syncMembers(records){
   for(const item of records){
     const [existing]=await select('profiles',`id=eq.${encodeURIComponent(item.id)}&select=user_id,email`);let userId=existing?.user_id;
     if(!userId&&item.password){const created=await ensureAccount(item.email,item.password,{role:item.role,member_code:item.id});userId=created?.id||null;}
-    if(userId&&item.password)await authAdmin(`/users/${userId}`,{method:'PUT',body:{password:item.password,email:item.email}});
+    if(userId&&item.password)await authAdmin(`/users/${userId}`,{method:'PUT',body:{password:item.password,email:item.email,email_confirm:true,user_metadata:{role:item.role,member_code:item.id}}});
     await upsert('profiles',[{...snakeMember(item),...(userId?{user_id:userId}:{})}]);
   }
 }
