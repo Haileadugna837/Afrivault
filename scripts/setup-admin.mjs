@@ -26,7 +26,6 @@ if(user){
 
 await request('/rest/v1/profiles?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify([{
   id:'ADMIN-PRIMARY',user_id:user.id,email,name,role:'admin',status:'active',verification:'verified',
-  onboarding_status:'complete',approved_at:new Date().toISOString(),phone_verified_at:new Date().toISOString(),
   notes:'Primary community administrator',excluded_benefit_ids:[],preferences:{}
 }])});
 

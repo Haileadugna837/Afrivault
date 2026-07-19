@@ -1,15 +1,10 @@
-import {method,safeError,send} from './_lib/http.mjs';import {requireIdentity} from './_lib/auth.mjs';import {select,update} from './_lib/supabase.mjs';
+import {method,safeError,send} from './_lib/http.mjs';import {requireIdentity} from './_lib/auth.mjs';import {select} from './_lib/supabase.mjs';
 const quoted=value=>`"${String(value).replaceAll('"','')}"`;
 const idFilter=ids=>ids.length?`id=in.(${ids.map(quoted).join(',')})`:'id=eq.__none__';
 export default async function handler(req,res){
   if(!method(req,res,['GET']))return;
   try{
     const actor=await requireIdentity(req);
-    if(['founder','employee','student','unemployed'].includes(actor.role)&&actor.profile.status==='active'&&(actor.profile.onboarding_status!=='complete'||actor.profile.verification!=='verified')){
-      const approved={onboarding_status:'complete',verification:'verified',phone_verification_channel:null,phone_verified_at:null};
-      await update('profiles',`user_id=eq.${actor.user.id}`,approved);
-      Object.assign(actor.profile,approved);
-    }
     const categories=await select('benefit_categories','select=*&order=sort_order');
     let benefits=[];let events=[];let eventPeople=[];
     if(actor.role==='admin'){
