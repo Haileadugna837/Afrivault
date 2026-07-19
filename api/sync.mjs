@@ -53,7 +53,7 @@ export default async function handler(req,res){
     const actor=await requireIdentity(req);
     if(domain==='cleanup-demo-data'){
       if(actor.role!=='admin')throw Object.assign(new Error('Forbidden'),{status:403,publicMessage:'Administrator access is required'});
-      const demoMemberIds=['FDRY-F-260071','FDRY-E-260184','FDRY-S-260239','FDRY-O-260306','FDRY-F-260412','FDRY-E-260488','FDRY-S-260522','FDRY-O-260577','FDRY-F-260601','FDRY-E-260634','FDRY-S-260688','FDRY-E-260720'];
+      const demoMemberIds=['ADMIN','FDRY-F-260071','FDRY-E-260184','FDRY-S-260239','FDRY-O-260306','FDRY-F-260412','FDRY-E-260488','FDRY-S-260522','FDRY-O-260577','FDRY-F-260601','FDRY-E-260634','FDRY-S-260688','FDRY-E-260720'];
       const demoApplicationIds=['AP-1839','AP-1840','AP-1841','AP-1842'];
       const demoBenefitIds=['aws','qatar','wework','canva','hyatt','selam','notion','linkedin','coursera','safaricom','wellness','jobfair'];
       const demoCategoryIds=['business','career','learning','travel','lifestyle','local'];
