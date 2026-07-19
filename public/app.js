@@ -151,7 +151,7 @@ function normalizeEvent(item) {
 function loadEvents() {
   try {
     const stored = JSON.parse(localStorage.getItem('foundry-events') || 'null');
-    const defaults = seedEvents.map(item => normalizeEvent({...item, eligibility:[...item.eligibility]}));
+    const defaults = backendEnabled()?[]:seedEvents.map(item => normalizeEvent({...item, eligibility:[...item.eligibility]}));
     if (!Array.isArray(stored)) return defaults;
     if (localStorage.getItem('foundry-events-schema') !== '3') {
       const existingIds = new Set(stored.map(item => item.id));
@@ -161,7 +161,7 @@ function loadEvents() {
       return migrated;
     }
     return stored.map(normalizeEvent);
-  } catch (_) { return seedEvents.map(item => ({...item, eligibility:[...item.eligibility]})); }
+  } catch (_) { return backendEnabled()?[]:seedEvents.map(item => ({...item, eligibility:[...item.eligibility]})); }
 }
 
 function saveEvents(events) {
@@ -200,16 +200,17 @@ function loadOffers() {
     const custom = JSON.parse(localStorage.getItem('foundry-custom-offers') || '[]');
     const overrides = JSON.parse(localStorage.getItem('foundry-benefit-overrides') || '{}');
     const deleted = new Set(JSON.parse(localStorage.getItem('foundry-deleted-benefits') || '[]'));
-    return [...baseOffers, ...custom].filter(offer => !deleted.has(offer.id)).map(offer => ({ ...offer, ...(overrides[offer.id] || {}) }));
+    const defaults=backendEnabled()?[]:baseOffers;
+    return [...defaults, ...custom].filter(offer => !deleted.has(offer.id)).map(offer => ({ ...offer, ...(overrides[offer.id] || {}) }));
   }
-  catch (_) { return [...baseOffers]; }
+  catch (_) { return backendEnabled()?[]:[...baseOffers]; }
 }
 
 function loadCategories() {
   try {
     const stored = JSON.parse(localStorage.getItem('foundry-benefit-categories') || 'null');
-    return Array.isArray(stored) && stored.length ? stored : seedBenefitCategories.map(item => ({...item}));
-  } catch (_) { return seedBenefitCategories.map(item => ({...item})); }
+    return Array.isArray(stored) ? stored : backendEnabled()?[]:seedBenefitCategories.map(item => ({...item}));
+  } catch (_) { return backendEnabled()?[]:seedBenefitCategories.map(item => ({...item})); }
 }
 
 function saveCategories(categories) {
@@ -224,8 +225,8 @@ function categoryById(id) {
 function loadPartners() {
   try {
     const stored = JSON.parse(localStorage.getItem('foundry-partners') || 'null');
-    return Array.isArray(stored) ? stored : seedPartners.map(item => ({...item, benefitIds:[...item.benefitIds]}));
-  } catch (_) { return seedPartners.map(item => ({...item, benefitIds:[...item.benefitIds]})); }
+    return Array.isArray(stored) ? stored : backendEnabled()?[]:seedPartners.map(item => ({...item, benefitIds:[...item.benefitIds]}));
+  } catch (_) { return backendEnabled()?[]:seedPartners.map(item => ({...item, benefitIds:[...item.benefitIds]})); }
 }
 
 function savePartners(partners) {
@@ -237,8 +238,8 @@ function savePartners(partners) {
 function loadUsageLogs() {
   try {
     const stored = JSON.parse(localStorage.getItem('foundry-usage-logs') || 'null');
-    return Array.isArray(stored) ? stored : seedUsageLogs.map(item => ({...item}));
-  } catch (_) { return seedUsageLogs.map(item => ({...item})); }
+    return Array.isArray(stored) ? stored : backendEnabled()?[]:seedUsageLogs.map(item => ({...item}));
+  } catch (_) { return backendEnabled()?[]:seedUsageLogs.map(item => ({...item})); }
 }
 
 function saveUsageLogs(logs) {
@@ -258,8 +259,8 @@ function getBenefitUsage(id, status = 'redeemed') {
 function loadMembers() {
   try {
     const savedMembers = JSON.parse(localStorage.getItem('foundry-members') || 'null');
-    return Array.isArray(savedMembers) ? savedMembers : seedMembers.map(member => ({...member, excludedBenefits:[...member.excludedBenefits]}));
-  } catch (_) { return seedMembers.map(member => ({...member, excludedBenefits:[...member.excludedBenefits]})); }
+    return Array.isArray(savedMembers) ? savedMembers : backendEnabled()?[]:seedMembers.map(member => ({...member, excludedBenefits:[...member.excludedBenefits]}));
+  } catch (_) { return backendEnabled()?[]:seedMembers.map(member => ({...member, excludedBenefits:[...member.excludedBenefits]})); }
 }
 
 function saveMembers(members) {
@@ -279,7 +280,7 @@ function getClickMap() {
 
 function getBenefitClicks(id) {
   const tracked = getClickMap();
-  return (seedBenefitClicks[id] || 0) + (tracked[id] || 0);
+  return (backendEnabled()?0:(seedBenefitClicks[id] || 0)) + (tracked[id] || 0);
 }
 
 function trackBenefitEvent(id, eventName = 'click') {
@@ -1276,7 +1277,7 @@ function renderAdmin() {
   populateCategorySelects();
   const members = loadMembers();
   const storedApplications = JSON.parse(localStorage.getItem('foundry-applications') || '[]');
-  const pending = [...storedApplications, ...seedApplications].filter(app => app.status === 'pending').length;
+  const pending = [...storedApplications, ...(backendEnabled()?[]:seedApplications)].filter(app => app.status === 'pending').length;
   const metrics = [
     ['TOTAL MEMBERS',members.length,`${members.filter(member => member.status === 'active').length} currently active`,'◎','#668fe9','#e0e7fb'],
     ['ACTIVE BENEFITS',offers.filter(o => o.status === 'active').length,'Across all access levels','◇','#668f3f','#e6f3d6'],

@@ -46,10 +46,11 @@
   async function verifyQr(qrToken,benefitId){return api('/api/qr/verify',{method:'POST',body:JSON.stringify({token:qrToken,benefitId})})}
   async function sendEmail(to,template,payload){return api('/api/email/send',{method:'POST',body:JSON.stringify({to,template,payload})})}
   async function registerApplication(application,password){return api('/api/sync',{method:'POST',body:JSON.stringify({domain:'application',payload:{...application,password}})})}
+  async function cleanupDemoData(){return sync('cleanup-demo-data',{})}
   async function weather(lat,lon,date){return api(`/api/weather?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&date=${encodeURIComponent(date)}`)}
   async function publicEvent(id){const result=await api(`/api/public/event?id=${encodeURIComponent(id)}`);return eventToApp(result.event,result.people||[])}
   async function signOut(){if(session?.access_token)auth('/logout',{method:'POST',headers:{authorization:`Bearer ${session.access_token}`}}).catch(()=>{});saveSession(null)}
   async function requestPasswordReset(email){return auth('/recover',{method:'POST',body:JSON.stringify({email,redirect_to:location.origin+location.pathname})})}
   async function updatePassword(password){const access=await token();return auth('/user',{method:'PUT',headers:{authorization:`Bearer ${access}`},body:JSON.stringify({password})})}
-  window.FoundryBackend={configured,signIn,signOut,restore,bootstrap,sync,registerApplication,uploadImage,issueQr,verifyQr,sendEmail,weather,publicEvent,requestPasswordReset,updatePassword,recoverySession:Boolean(recoverySession),authCallbackSession:Boolean(authCallbackSession),hasSession:()=>Boolean(readSession()),get hydrating(){return hydrating}};
+  window.FoundryBackend={configured,signIn,signOut,restore,bootstrap,sync,registerApplication,cleanupDemoData,uploadImage,issueQr,verifyQr,sendEmail,weather,publicEvent,requestPasswordReset,updatePassword,recoverySession:Boolean(recoverySession),authCallbackSession:Boolean(authCallbackSession),hasSession:()=>Boolean(readSession()),get hydrating(){return hydrating}};
 })();

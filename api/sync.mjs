@@ -51,6 +51,28 @@ export default async function handler(req,res){
       const record=payload;await upsert('guest_registrations',[{id:record.id,event_id:record.eventId,name:record.name,email:record.email,phone:record.phone||'',organization:record.organization||'',attendance_days:record.days||[],status:record.status||'going'}]);const [guestEvent]=await select('events',`id=eq.${encodeURIComponent(record.eventId)}&select=title`);await sendTemplate({to:record.email,template:'guest-registration',payload:{name:record.name,eventTitle:guestEvent?.title||'Foundry event'}}).catch(()=>{});send(res,200,{ok:true});return;
     }
     const actor=await requireIdentity(req);
+    if(domain==='cleanup-demo-data'){
+      if(actor.role!=='admin')throw Object.assign(new Error('Forbidden'),{status:403,publicMessage:'Administrator access is required'});
+      const demoMemberIds=['FDRY-F-260071','FDRY-E-260184','FDRY-S-260239','FDRY-O-260306','FDRY-F-260412','FDRY-E-260488','FDRY-S-260522','FDRY-O-260577','FDRY-F-260601','FDRY-E-260634','FDRY-S-260688','FDRY-E-260720'];
+      const demoApplicationIds=['AP-1839','AP-1840','AP-1841','AP-1842'];
+      const demoBenefitIds=['aws','qatar','wework','canva','hyatt','selam','notion','linkedin','coursera','safaricom','wellness','jobfair'];
+      const demoCategoryIds=['business','career','learning','travel','lifestyle','local'];
+      const demoEventIds=['EVENT-FOUNDERS','EVENT-COFFEE','EVENT-CAREER','EVENT-WEBINAR'];
+      const demoEmails=['admin@foundry.demo','founder@foundry.demo','employee@foundry.demo','student@foundry.demo','opportunity@foundry.demo','partner@foundry.demo','marta@tena.demo','henok@rd.demo','betelhem@aau.demo','yared@career.demo','ruth@orbit.demo','kaleb@nova.demo','saron@astu.demo','dawit@vertex.demo'];
+      const inFilter=values=>`in.(${values.map(value=>`"${value}"`).join(',')})`;
+      await remove('usage_logs',`or=(member_id.${inFilter(demoMemberIds)},partner_id.eq.PARTNER-SELAM)`);
+      await remove('applications',`id=${inFilter(demoApplicationIds)}`);
+      await remove('partner_benefits','partner_id=eq.PARTNER-SELAM');
+      await remove('partners','id=eq.PARTNER-SELAM');
+      await remove('event_people',`event_id=${inFilter(demoEventIds)}`);
+      await remove('events',`id=${inFilter(demoEventIds)}`);
+      await remove('benefits',`id=${inFilter(demoBenefitIds)}`);
+      await remove('benefit_categories',`id=${inFilter(demoCategoryIds)}`);
+      await remove('profiles',`id=${inFilter(demoMemberIds)}`);
+      const authUsers=await authAdmin('/users?page=1&per_page=1000');
+      for(const user of authUsers.users||[])if(demoEmails.includes(String(user.email||'').toLowerCase()))await authAdmin(`/users/${user.id}`,{method:'DELETE'});
+      send(res,200,{ok:true,removed:{members:demoMemberIds.length,applications:demoApplicationIds.length,partner:'PARTNER-SELAM',benefits:demoBenefitIds.length,categories:demoCategoryIds.length,events:demoEventIds.length}});return;
+    }
     if(domain==='rsvps'){
       const rows=Object.entries(payload||{}).map(([eventId,r])=>({event_id:eventId,user_id:actor.user.id,status:r.status,email:r.email||actor.user.email||'',attendance_days:r.days||[],guest_requested:Boolean(r.guestRequested),guest_name:r.guestName||'',guest_email:r.guestEmail||'',guest_status:r.guestRequested?'requested':'not-requested'}));
       await upsert('event_rsvps',rows,'event_id,user_id');send(res,200,{ok:true});return;
